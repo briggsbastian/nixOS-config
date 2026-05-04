@@ -25,12 +25,24 @@
     proton-vpn
     eddie
     vlc
+    #tools for hyrpland
+    waybar
+    rofi
+    grim
+    slurp
+    hyprlock
+    cliphist
+    hyprpolkitagent
+    hyprshot
+    dunst
+    hypridle
+    hyprpaper
   ];
 
   services.flatpak = { 
     enable = true;
     remotes = [{ name = "flathub"; location = "https://flathub.org/repo/flathub.flatpakrepo";}];
-    packages = [ "com.github.iwalton3.jellyfin-media-player" "me.proton.Mail.flatpakref" ];
+    packages = [ "com.github.iwalton3.jellyfin-media-player" "me.proton.Mail" ];
     update.auto = { enable = true; onCalendar = "weekly";};
   };
 

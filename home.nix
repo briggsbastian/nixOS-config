@@ -4,6 +4,7 @@
   imports = [
     ./dotfiles/starship.nix
     ./dotfiles/jellyfin.nix
+    ./dotfiles/zsh.nix
   ];
   home.stateVersion = "25.11";
 
@@ -17,6 +18,8 @@
 	italic = { family = "JetBrainsMono Nerd Font"; style = "Italic"; };
 	size = 12;
       };
+    window.opacity = 0.8; 
+
     };
   };
 
@@ -26,19 +29,6 @@
     mouse = true;
     terminal = "screen-256color";
     historyLimit = 10000;
-  };
-
-  programs.zsh = {
-    enable = true;
-    enableCompletion = true;
-    autosuggestion.enable = true;
-    syntaxHighlighting.enable = true;
-    history.size = 10000;
-      oh-my-zsh = {
-        enable = true;
-        plugins = [ "git" "thefuck" ];
-        theme = "robbyrussell";
-      };
   };
 
   programs.neovim = { 
