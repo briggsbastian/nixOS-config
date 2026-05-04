@@ -15,7 +15,7 @@
     };
   };
 
-  outputs = { self, home-manager, nix-flatpak, nixvim, nixpkgs, ... }: {
+  outputs = inputs @ { self, home-manager, nix-flatpak, nixvim, nixpkgs, ... }: {
     nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
@@ -25,6 +25,7 @@
         {
 	  home-manager.useGlobalPkgs = true;
 	  home-manager.useUserPackages = true;
+	  home-manager.extraSpecialArgs = { inherit inputs; };
 	  home-manager.users.briggs = import ./home.nix;
 	}
       ];

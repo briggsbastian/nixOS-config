@@ -17,6 +17,7 @@
     opencode
     claude-code
     btop
+    cowsay
     #tools
     obs-studio
     obsidian

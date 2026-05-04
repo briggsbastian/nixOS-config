@@ -1,4 +1,4 @@
-{ pkgs, ...}: 
+{ pkgs, inputs, ...}: 
 
 {
   imports = [
@@ -9,6 +9,7 @@
     ./dotfiles/alacritty.nix
   ];
   home.stateVersion = "25.11";
+  home.username = "briggs";
 
 
   programs.tmux = {

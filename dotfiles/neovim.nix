@@ -8,7 +8,7 @@
     viAlias = true;
     vimAlias = true;
 
-    colorschemas.gruvbox.enable = true;
+    colorschemes.gruvbox.enable = true;
 
     opts = {
       number = true;
@@ -21,7 +21,9 @@
       lualine.enable = true;
       telescope.enable = true;
       treesitter.enable = true;
-      lsp = { enable = true; servers{rust_analyzer.enable = true};};
+      lsp = { 
+        enable = true; 
+      };
     };
 
     keymaps = [ 
