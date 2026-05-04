@@ -7,18 +7,9 @@
     ./dotfiles/zsh.nix
     ./dotfiles/neovim.nix
     ./dotfiles/alacritty.nix
+    ./dotfiles/tmux.nix
   ];
   home.stateVersion = "25.11";
   home.username = "briggs";
-
-
-  programs.tmux = {
-    enable = true;
-    clock24 = true;
-    mouse = true;
-    terminal = "screen-256color";
-    historyLimit = 10000;
-  };
-
 
 }
