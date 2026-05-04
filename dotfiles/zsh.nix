@@ -2,9 +2,9 @@
 {
   programs.zsh = {
     enable = true;
-    enableAutoCompletion = true;
+    enableCompletion = true;
     autosuggestion.enable = true;
-    syntaxHighlighting. enable = true;
+    syntaxHighlighting.enable = true;
 
     shellAliases = {
       rebuild = "sudo nixos-rebuild switch";
