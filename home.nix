@@ -5,23 +5,11 @@
     ./dotfiles/starship.nix
     ./dotfiles/jellyfin.nix
     ./dotfiles/zsh.nix
+    ./dotfiles/neovim.nix
+    ./dotfiles/alacritty.nix
   ];
   home.stateVersion = "25.11";
 
-
-  programs.alacritty = {
-    enable = true;
-    settings = {
-      font = {
-        normal = { family = "JetBrainsMono Nerd Font"; style = "Regular"; };
-	bold = { family = "JetBrainsMono Nerd Font"; style = "Bold"; };
-	italic = { family = "JetBrainsMono Nerd Font"; style = "Italic"; };
-	size = 12;
-      };
-    window.opacity = 0.8; 
-
-    };
-  };
 
   programs.tmux = {
     enable = true;
@@ -31,12 +19,5 @@
     historyLimit = 10000;
   };
 
-  programs.neovim = { 
-    enable = true;
-    defaultEditor = true;
-    extraConfig = ''
-      set number
-    '';
-  };
 
 }

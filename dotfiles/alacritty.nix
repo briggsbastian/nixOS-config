@@ -3,7 +3,7 @@
 
   programs.alacritty = { 
     enable = true;
-    settings {
+    settings = {
       font = {
         normal = { family = "JetBrainsMono Nerd Font"; style = "Regular"; };
 	bold = { family = "JetBrainsMono Nerd Font"; style = "Bold"; };
@@ -12,6 +12,6 @@
       };
       window.opacity = 0.8;
     };
+    theme = "gruvbox_dark";
   };
-
 }

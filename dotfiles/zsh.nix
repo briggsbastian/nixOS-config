@@ -9,7 +9,7 @@
     shellAliases = {
       rebuild = "sudo nixos-rebuild switch";
       rebuild-test = "sudo nixos-rebuild test";
-
+      update = "sudo nixos-rebuild switch --upgrade";
       ls = "lsd";
     };
 

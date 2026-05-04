@@ -10,9 +10,12 @@
     nix-flatpak = {
       url = "github:gmodena/nix-flatpak";
     };
+    nixvim = {
+      url = "github:nix-community/nixvim";
+    };
   };
 
-  outputs = { self, home-manager, nix-flatpak, nixpkgs, ... }: {
+  outputs = { self, home-manager, nix-flatpak, nixvim, nixpkgs, ... }: {
     nixosConfigurations.nixos = nixpkgs.lib.nixosSystem {
       system = "x86_64-linux";
       modules = [
