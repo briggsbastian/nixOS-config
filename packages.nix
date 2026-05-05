@@ -17,7 +17,6 @@
     opencode
     claude-code
     btop
-    cowsay
     #tools
     obs-studio
     obsidian
@@ -26,7 +25,7 @@
     proton-vpn
     eddie
     vlc
-    #tools for hyrpland
+    #tools for hyprland
     waybar
     rofi
     grim
@@ -38,6 +37,7 @@
     dunst
     hypridle
     hyprpaper
+    quickshell
   ];
 
   services.flatpak = { 
