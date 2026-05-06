@@ -21,6 +21,7 @@
       lualine.enable = true;
       telescope.enable = true;
       treesitter.enable = true;
+      colorizer.enable = true; 
       lsp = { 
         enable = true; 
       };
@@ -33,5 +34,9 @@
       action = "<cmd>Telescope find_files<cr>";
     }
     ];
+
+    extraConfigLua = ''
+      vim.api.nvim_set_hl(0, "Normal", {bg = "none"})
+    '';
   };
 }

@@ -8,7 +8,7 @@
     ./dotfiles/neovim.nix
     ./dotfiles/alacritty.nix
     ./dotfiles/tmux.nix
-    ./dotfiles/waybar.nix
+    ./hyprland/waybar/waybar.nix
   ];
   home.stateVersion = "25.11";
   home.username = "briggs";
