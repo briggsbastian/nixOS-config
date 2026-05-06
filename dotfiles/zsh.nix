@@ -9,6 +9,8 @@
     shellAliases = {
       rebuild = "sudo nixos-rebuild switch";
       rebuild-test = "sudo nixos-rebuild test";
+      rebuild-kde = "sudo nixos-rebuild --flake .#nixos-kde";
+      rebuild-hypr = "sudo nixos-rebuild --flake .#nixos-hyprland";
       update = "sudo nixos-rebuild switch --upgrade";
       ls = "lsd";
     };
