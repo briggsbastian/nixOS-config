@@ -25,19 +25,6 @@
     proton-vpn
     eddie
     vlc
-    #tools for hyprland
-    waybar
-    rofi
-    grim
-    slurp
-    hyprlock
-    cliphist
-    hyprpolkitagent
-    hyprshot
-    dunst
-    hypridle
-    hyprpaper
-    quickshell
   ];
 
   services.flatpak = { 

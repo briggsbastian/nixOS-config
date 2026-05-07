@@ -23,7 +23,7 @@
       treesitter.enable = true;
       colorizer.enable = true; 
       lsp = { 
-        enable = true; 
+        enable = true;
       };
     };
 
