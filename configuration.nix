@@ -9,6 +9,7 @@
     [ # Include the results of the hardware scan.
       ./hardware-configuration.nix
       ./packages.nix
+      ./udev.nix
     ];
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
