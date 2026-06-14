@@ -66,9 +66,4 @@
       nerd-fonts.jetbrains-mono
     ];
   };
-  #im not happy putting this here but dont know where else to put it 
-  xdg.portal = {  
-    enable = true;
-    extraPortals = [ pkgs.xdg-desktop-portal-gtk ];
-  };
 }
