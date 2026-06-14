@@ -1,0 +1,11 @@
+# .gitleaks.toml — repo secret-scanning config.
+# Extends gitleaks' default ruleset (useDefault) and documents known false positives.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Flatpak .flatpakref files carry the remote's PUBLIC GPG verification key (e.g. Flathub's), not a credential."
+paths = [
+  '''flatpaks/.*\.flatpakref$''',
+]
