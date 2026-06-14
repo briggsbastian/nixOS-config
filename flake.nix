@@ -5,9 +5,10 @@
     nix-flatpak = { url = "github:gmodena/nix-flatpak"; };
     nixvim = { url = "github:nix-community/nixvim"; };
     noctalia = {url = "github:noctalia-dev/noctalia-shell"; inputs.nixpkgs.follows = "nixpkgs"; };
+    claude-code = {url = "github:sadjow/claude-code-nix"; }; 
   };
 
-  outputs = inputs @ {self, home-manager, nix-flatpak, nixvim, nixpkgs, ...}:
+  outputs = inputs @ {self, home-manager, nix-flatpak, nixvim, nixpkgs, claude-code, ...}:
     let
       mkSystem = { homeFile }: nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";

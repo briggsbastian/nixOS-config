@@ -12,4 +12,5 @@
   ];
   home.stateVersion = "25.11";
   home.username = "briggs";
+  home.packages = [inputs.claude-code.packages.${pkgs.system}.claude-code];
 }

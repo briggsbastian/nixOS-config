@@ -21,7 +21,9 @@
   # networking.proxy.noProxy = "127.0.0.1,localhost,internal.domain";
   # Enable networking
   networking.networkmanager.enable = true;
-  # Set your time zone.
+  networking.nameservers = ["1.1.1.1" "9.9.9.9"];
+  networking.networkmanager.dns = "none";
+
   time.timeZone = "America/Los_Angeles";
   # Select internationalisation properties.
   i18n.defaultLocale = "en_US.UTF-8";
@@ -77,7 +79,8 @@
     shell = pkgs.zsh;
     extraGroups = [ "networkmanager" "wheel" ];
   };
-
+  services.openssh.enable = true; 
+  networking.firewall.enable = false;
   system.stateVersion = "25.11"; # Did you read the comment?
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
 }

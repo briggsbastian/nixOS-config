@@ -10,7 +10,7 @@
 	italic = { family = "JetBrainsMono Nerd Font"; style = "Italic"; };
 	size = 12;
       };
-      window.opacity = 0.8;
+      window.opacity = 0.50;
     };
     theme = "gruvbox_dark";
   };

@@ -7,11 +7,34 @@
     syntaxHighlighting.enable = true;
 
     shellAliases = {
-      rebuild = "sudo nixos-rebuild switch";
-      rebuild-test = "sudo nixos-rebuild test";
-      rebuild-kde = "sudo nixos-rebuild switch --flake .#nixos-kde";
-      rebuild-hypr = "sudo nixos-rebuild switch --flake .#nixos-hyprland";
-      update = "sudo nixos-rebuild switch --upgrade";
+      # Rebuild from the current flake.lock — no input bumps.
+      rebuild-kde       = "sudo /etc/nixos/scripts/rebuild.sh switch --flake /etc/nixos#nixos-kde";
+      rebuild-hypr      = "sudo /etc/nixos/scripts/rebuild.sh switch --flake /etc/nixos#nixos-hyprland";
+      rebuild-test-kde  = "sudo /etc/nixos/scripts/rebuild.sh test   --flake /etc/nixos#nixos-kde";
+      rebuild-test-hypr = "sudo /etc/nixos/scripts/rebuild.sh test   --flake /etc/nixos#nixos-hyprland";
+      rebuild-boot-kde  = "sudo /etc/nixos/scripts/rebuild.sh boot   --flake /etc/nixos#nixos-kde";
+      rebuild-boot-hypr = "sudo /etc/nixos/scripts/rebuild.sh boot   --flake /etc/nixos#nixos-hyprland";
+
+      # Full upgrade flow: bump flake.lock → build → show closure diff → confirm → switch.
+      upgrade           = "/etc/nixos/scripts/upgrade.sh";              # auto-detects KDE/Hypr from session
+      upgrade-kde       = "/etc/nixos/scripts/upgrade.sh kde";
+      upgrade-hypr      = "/etc/nixos/scripts/upgrade.sh hypr";
+      # Same as above but stages for next reboot instead of switching live.
+      # Prefer these when the kernel is bumping.
+      upgrade-boot-kde  = "/etc/nixos/scripts/upgrade.sh boot kde";
+      upgrade-boot-hypr = "/etc/nixos/scripts/upgrade.sh boot hypr";
+
+      # Maintenance.
+      nix-diff     = "/etc/nixos/scripts/upgrade.sh diff";       # running vs latest built
+      nix-gens     = "/etc/nixos/scripts/upgrade.sh gens";       # list system generations
+      nix-gc       = "/etc/nixos/scripts/upgrade.sh gc";         # delete generations >14d old
+      nix-optimise = "/etc/nixos/scripts/upgrade.sh optimise";   # dedupe /nix/store
+      nix-rollback = "/etc/nixos/scripts/upgrade.sh rollback";   # back one generation
+
+      # Back-compat with old alias names.
+      update-kde  = "/etc/nixos/scripts/upgrade.sh kde";
+      update-hypr = "/etc/nixos/scripts/upgrade.sh hypr";
+
       ls = "lsd";
     };
 

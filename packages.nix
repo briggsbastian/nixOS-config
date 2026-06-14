@@ -15,8 +15,8 @@
     alacritty
     starship
     opencode
-    claude-code
     btop
+    fzf
     #tools
     obs-studio
     obsidian
@@ -25,12 +25,15 @@
     proton-vpn
     eddie
     vlc
+    blender
+    gimp
+    godot
   ];
 
   services.flatpak = { 
     enable = true;
     remotes = [{ name = "flathub"; location = "https://flathub.org/repo/flathub.flatpakrepo";}];
-    packages = [ "com.github.iwalton3.jellyfin-media-player" "me.proton.Mail" ];
+    packages = [ "com.github.iwalton3.jellyfin-media-player" "me.proton.Mail" "org.DolphinEmu.dolphin-emu" ];
     update.auto = { enable = true; onCalendar = "weekly";};
   };
 
@@ -45,6 +48,9 @@
     enable = true;
     remotePlay.openFirewall = true;
     dedicatedServer.openFirewall = true;
+    package = pkgs.steam.override {
+      extraArgs = "-pipewire";
+    };
   };
 
   programs.zsh = { enable = true; };
