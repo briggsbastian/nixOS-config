@@ -30,7 +30,10 @@ set -uo pipefail
 # ---- paths ---------------------------------------------------------------
 
 FLAKE_DIR="/etc/nixos"
-REBUILD="${FLAKE_DIR}/scripts/rebuild.sh"
+# rebuild.sh lives next to this script — locate it relative to ourselves so
+# this keeps working wherever the host dir lives in the tree.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REBUILD="${SCRIPT_DIR}/rebuild.sh"
 BUILD_LINK="/tmp/nixos-upgrade-result"
 
 # ---- pretty printing -----------------------------------------------------

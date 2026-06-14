@@ -13,7 +13,7 @@
       mkSystem = { homeFile }: nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./configuration.nix
+          ./hosts/gaming/configuration.nix
           home-manager.nixosModules.home-manager
           nix-flatpak.nixosModules.nix-flatpak
           {
@@ -26,8 +26,18 @@
       };
     in { 
       nixosConfigurations = {
-        nixos-hyprland = mkSystem { homeFile = ./home-hyprland.nix; };
-        nixos-kde = mkSystem { homeFile = ./home-kde.nix; };
+        nixos-hyprland = mkSystem { homeFile = ./hosts/gaming/home-hyprland.nix; };
+        nixos-kde = mkSystem { homeFile = ./hosts/gaming/home-kde.nix; };
+
+        # Fleet servers: lean, no home-manager / desktop inputs.
+        # Staging + CI/build host — adopt the existing 25.11 install.
+        hacktop = nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            ./modules/common.nix
+            ./hosts/hacktop/configuration.nix
+          ];
+        };
       };
     };
 }
