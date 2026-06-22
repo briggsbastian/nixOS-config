@@ -1,14 +1,12 @@
 # modules/internal-ca.nix
 #
-# Trust the homelab's private step-ca (running on mgmt) and consume its services:
-# the root cert for TLS, the Harmonia binary cache for fast substitution, and
-# step-ca's ACME endpoint as the default for any host that requests certificates.
-# All behind one mkEnableOption — the kind of small, typed, reusable module the
-# NixOS module system is actually for.
+# Trust the homelab's private step-ca (on mgmt) and consume its services: the
+# root cert for TLS, the Harmonia binary cache, and step-ca's ACME endpoint as
+# the default for any host that requests certs. All behind one mkEnableOption.
 #
-# Every value here is PUBLIC (root cert, cache pubkey, URLs) — safe to commit.
-# Internal names (cache.mgmt.lan / ca.mgmt.lan) resolve via AdGuard on mgmt; the
-# TLD is migrating *.mgmt.lan -> *.alcove, so flip these defaults at cutover.
+# Every value here is public (root cert, cache pubkey, URLs) - safe to commit.
+# Internal names resolve via AdGuard on mgmt; the TLD is migrating
+# *.mgmt.lan -> *.alcove, so flip these defaults at cutover.
 { config, lib, ... }:
 
 let
@@ -25,7 +23,7 @@ in
     rootCertFile = lib.mkOption {
       type = lib.types.path;
       default = ./certs/mgmt-root.crt;
-      description = "PEM of the step-ca root CA (public — safe to commit).";
+      description = "PEM of the step-ca root CA (public - safe to commit).";
     };
 
     acmeDirectory = lib.mkOption {
@@ -58,7 +56,7 @@ in
       description = ''
         mgmt's LAN IP. The CA + cache hostnames are pinned to it in /etc/hosts so
         they resolve even when this host isn't using mgmt's AdGuard as its
-        resolver — otherwise https://ca.mgmt.lan / https://cache.mgmt.lan don't
+        resolver - otherwise https://ca.mgmt.lan / https://cache.mgmt.lan don't
         resolve and the cache silently falls back to cache.nixos.org.
       '';
     };
@@ -77,9 +75,9 @@ in
     networking.hosts."${cfg.mgmtIp}" = [ (hostOf cfg.acmeDirectory) (hostOf cfg.cacheUrl) ];
 
     # 2. Add mgmt's binary cache (cfg.useCache). cache.mgmt.lan serves a real
-    #    step-ca cert as of 2026-06-15 (PKI fixed) and the root is trusted via
-    #    item 1, so nix can verify it. `extra-*` APPENDS — cache.nixos.org stays
-    #    as the fallback when a path isn't cached or harmonia is down.
+    #    step-ca cert and the root is trusted via item 1, so nix can verify it.
+    #    `extra-*` appends - cache.nixos.org stays as the fallback when a path
+    #    isn't cached or harmonia is down.
     nix.settings = lib.mkIf cfg.useCache {
       extra-substituters = [ cfg.cacheUrl ];
       extra-trusted-public-keys = [ cfg.cachePublicKey ];

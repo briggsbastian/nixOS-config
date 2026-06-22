@@ -1,0 +1,51 @@
+{
+  "uid": "siem-auth-failures",
+  "title": "SIEM-lite - Auth Failures",
+  "tags": ["siem-lite", "security"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "30s",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "SSH failed passwords by host (5m windows)",
+      "description": "Drives the SSHBruteForce alert (fires > 10 in 5m).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 50 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "queryType": "range", "expr": "sum by (host) (count_over_time({unit=\"sshd.service\"} |= `Failed password` [5m]))", "legendFormat": "{{host}}" }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "sudo auth failures by host (10m windows)",
+      "description": "Drives the SudoFailure alert (fires > 3 in 10m).",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 50 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "queryType": "range", "expr": "sum by (host) (count_over_time({job=\"systemd-journal\"} |= `sudo:` |~ `authentication failure` [10m]))", "legendFormat": "{{host}}" }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "sshd logs (all hosts)",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 13, "w": 24, "x": 0, "y": 9 },
+      "options": { "showTime": true, "wrapLogMessage": true, "enableLogDetails": true, "dedupStrategy": "none", "sortOrder": "Descending" },
+      "targets": [
+        { "refId": "A", "datasource": { "type": "loki", "uid": "loki" }, "queryType": "range", "expr": "{unit=\"sshd.service\"}" }
+      ]
+    }
+  ]
+}

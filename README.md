@@ -1,52 +1,44 @@
 # nixOS fleet
 
-A single [Nix flake](flake.nix) that manages a small homelab fleet — one desktop
-and four servers — declaratively. Servers are deployed remotely with
-[Colmena](https://github.com/zhaofengli/colmena); secrets use
-[sops-nix](https://github.com/Mic92/sops-nix) (each host decrypts its own with its
-SSH host key). The desktop tracks `nixpkgs` unstable; the servers track stable
-(`nixos-25.11`), so folding existing boxes into the flake is zero version churn.
+One flake for my homelab: a desktop plus five servers, all NixOS. Servers are
+deployed over SSH with [Colmena](https://github.com/zhaofengli/colmena) from the
+desktop. Secrets are [sops-nix](https://github.com/Mic92/sops-nix), and each host
+decrypts its own with its SSH host key. The desktop runs nixpkgs unstable; the
+servers stay on stable (nixos-25.11).
 
 ## Hosts
 
 | Host | Role |
 |------|------|
-| **gaming** | Daily-driver desktop (KDE Plasma) and the Colmena control node. |
-| **mgmt** | LAN infrastructure — AdGuard DNS, nginx reverse proxy, a private ACME CA (step-ca), Wazuh SIEM, Tactical RMM, Prometheus/Grafana, NetBox, Forgejo, a Harmonia binary cache, PXE/netboot. Folded in last and gated, since it serves the LAN's DNS + PKI. See [hosts/mgmt/README.md](hosts/mgmt/README.md). |
-| **media** | Jellyfin + the \*arr stack (Sonarr/Radarr/Prowlarr/Bazarr/NZBGet), NAS over NFS. |
-| **playground** | libvirt/KVM security lab host + Guacamole gateway. |
-| **hacktop** | Staging / CI build host. |
+| gaming | KDE desktop, and the box I deploy from. |
+| mgmt | The LAN's core: AdGuard DNS, an nginx + step-ca reverse proxy, Prometheus/Grafana, a Loki + Alloy log stack with Alertmanager/ntfy alerts, NetBox, Forgejo, a Harmonia cache, and PXE boot. It runs DNS and PKI for the house, so I deploy it carefully. [Details](hosts/lan/mgmt/README.md). |
+| media | Jellyfin, the *arr stack, and Kavita, served off the NAS over NFS. |
+| playground | A libvirt security lab with a Guacamole gateway. |
+| hacktop | Staging and CI builds. |
+| cloud1 | A Linode VPS, installed with disko + nixos-anywhere. |
 
-Servers run behind a private internal CA: services are reached over `*.mgmt.lan`
-(resolved by AdGuard) with TLS issued by step-ca, and pull from the `mgmt` binary
-cache. The shared baseline — key-only SSH, an nftables firewall, the Colmena
-`deploy` user, sops, the Wazuh agent, and internal-CA trust — lives in
-[modules/](modules).
+Internal services sit behind a private CA. They're reached at `*.mgmt.lan` (AdGuard
+resolves the names) over TLS from step-ca, and hosts pull from mgmt's binary cache.
+The shared baseline (key-only SSH, nftables, the `deploy` user, sops, the Alloy log
+shipper, CA trust) lives in [modules/](modules).
 
 ## Layout
 
 ```
-flake.nix          # the fleet: nixosConfigurations + Colmena hive + devShell
-modules/           # shared, reusable modules (common, internal-ca, wazuh-agent, …)
-hosts/<host>/      # per-host config (configuration.nix + hardware-configuration.nix + extras)
-pkgs/              # out-of-nixpkgs packages (e.g. the repackaged Wazuh agent)
-secrets/           # sops-encrypted per-host secrets (*.yaml)
-.sops.yaml         # sops recipients (public age keys only)
+flake.nix             nixosConfigurations + Colmena hive + devShell
+modules/              shared modules (common, internal-ca, siem-lite, ...)
+hosts/<zone>/<host>/  per-host config, grouped by zone (lan / cloud / workstation)
+pkgs/                 packages not in nixpkgs
+secrets/              sops-encrypted per-host secrets
+.sops.yaml            sops recipients (public keys only)
 ```
-
-Per-host secrets are sops-encrypted; runtime service secrets (RMM/NetBox/cache
-keys, etc.) are generated on the host, never committed.
 
 ## Deploying
 
 ```sh
-nix develop                     # shell with colmena + the sops/age toolchain
-colmena apply --on <host>       # build + push + activate one host
-colmena apply --on @server      # everything tagged "server"
+nix develop                  # colmena + the sops/age toolchain
+colmena apply --on <host>    # one host
+colmena apply --on @server   # all servers
 ```
 
-The desktop rebuilds with the `rebuild-kde` alias defined in
-[hosts/gaming/dotfiles/zsh.nix](hosts/gaming/dotfiles/zsh.nix).
-
-Day-to-day operations — updates, garbage collection, secrets, TLS/PKI, backups,
-rollback, and troubleshooting — are in **[MAINTENANCE.md](MAINTENANCE.md)**.
+Updates, GC, secrets, TLS, backups, and rollback are in [MAINTENANCE.md](MAINTENANCE.md).

@@ -5,22 +5,23 @@
     nix-flatpak = { url = "github:gmodena/nix-flatpak"; };
     nixvim = { url = "github:nix-community/nixvim"; };
     claude-code = {url = "github:sadjow/claude-code-nix"; };
-    # Claude Desktop GUI chat client (community repackage of the official app —
-    # no nixpkgs/official Linux build exists). Used ONLY by the gaming host's
-    # home configs below; servers never reference it.
-    # NOTE: it `follows = "nixpkgs-stable"` (25.11), NOT unstable: the repackage
-    # build-depends on `nodePackages.asar`, which nixpkgs-UNSTABLE removed
-    # 2026-03-03 (the flake is stale). 25.11 still ships it, and we already fetch
-    # that tree for the servers — so this reuses it (no extra nixpkgs in the lock).
+    # Claude Desktop GUI client (community repackage; no official Linux build).
+    # Only the gaming host uses it; servers never reference it.
+    # follows nixpkgs-stable (25.11), not unstable: needs nodePackages.asar,
+    # which unstable dropped 2026-03-03. stable still has it and we already fetch
+    # that tree for the servers, so no extra nixpkgs in the lock.
     claude-desktop = { url = "github:k3d3/claude-desktop-linux-flake"; inputs.nixpkgs.follows = "nixpkgs-stable"; };
     colmena = { url = "github:zhaofengli/colmena"; inputs.nixpkgs.follows = "nixpkgs"; };
     sops-nix = { url = "github:Mic92/sops-nix"; inputs.nixpkgs.follows = "nixpkgs"; };
-    # Two-input split: the desktop tracks `nixpkgs` (unstable); the SERVERS track
-    # stable (nixos-25.11 — what the boxes already run, so zero version churn).
+    # disko - declarative disk partitioning, for the first nixos-anywhere
+    # install (cloud1). follows nixpkgs-stable like the servers.
+    disko = { url = "github:nix-community/disko"; inputs.nixpkgs.follows = "nixpkgs-stable"; };
+    # desktop tracks nixpkgs (unstable); servers track stable (nixos-25.11,
+    # what the boxes already run, so zero version churn).
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
-    # mgmt is folded in faithfully + GATED: pinned to the EXACT nixpkgs rev it
-    # already runs, so the first Colmena cutover is a no-op (no package churn →
-    # no DNS/PKI/SIEM restarts). Bump this deliberately, on its own, later.
+    # mgmt pinned to the exact nixpkgs rev it already runs, so the first Colmena
+    # cutover is a no-op (no package churn -> no DNS/PKI/SIEM restarts). bump
+    # this deliberately, later.
     nixpkgs-mgmt.url = "github:NixOS/nixpkgs/755f5aa91337890c432639c60b6064bb7fe67769";
   };
 
@@ -29,7 +30,7 @@
       mkSystem = { homeFile }: nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
-          ./hosts/gaming/configuration.nix
+          ./hosts/workstation/desktop/configuration.nix
           home-manager.nixosModules.home-manager
           nix-flatpak.nixosModules.nix-flatpak
           {
@@ -43,55 +44,57 @@
 
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
 
-      # Every server = the shared baseline + sops + its own host module. One
-      # module list feeds BOTH the nixosConfiguration (nixos-rebuild /
-      # nixos-anywhere) and the Colmena node, so the two never drift.
-      serverModules = host: [
+      # Every server = shared baseline + sops + its own host module. One module
+      # list feeds both the nixosConfiguration and the Colmena node, so they
+      # never drift.
+      serverModules = name: meta: [
         ./modules/common.nix
         ./modules/internal-ca.nix
-        ./modules/wazuh-agent.nix
+        ./modules/siem-lite.nix
         sops-nix.nixosModules.sops
-        ./hosts/${host}/configuration.nix
+        inputs.disko.nixosModules.disko   # inert unless the host sets disko.devices (only cloud1 does)
+        ./hosts/${meta.zone}/${name}/configuration.nix
       ];
 
-      # The fleet's servers: host -> deploy metadata. Adding a server is one line
-      # here + a hosts/<host>/ dir. targetHost is ALWAYS an IP — the internal
-      # domain is served by mgmt's AdGuard, so resolving it here would be a DNS
-      # bootstrap deadlock.
-      #   mgmt (192.168.1.222) is folded in LAST and gated — it serves the LAN's
+      # The servers: host -> deploy metadata. `zone` is both the hosts/ subdir
+      # (hosts/<zone>/<name>/) and a Colmena tag, so `colmena apply --on @lan` /
+      # `@cloud` work. Adding a server is one line here + a hosts/<zone>/<name>/
+      # dir. targetHost is always an IP - the internal domain is served by mgmt's
+      # AdGuard, so resolving it here would be a DNS deadlock.
+      #   mgmt (192.168.1.222) is folded in last and gated - it serves the LAN's
       #   DNS + PKI, so a bad deploy takes down the whole house (see Project 1).
       servers = {
-        hacktop = { targetHost = "192.168.1.26"; tags = [ "server" "staging" ]; };
-        media   = { targetHost = "192.168.1.189"; tags = [ "server" "media" ]; };
-        playground   = { targetHost = "192.168.1.217"; tags = [ "server" "lab" ]; };
+        hacktop    = { zone = "lan";   targetHost = "192.168.1.26";   tags = [ "server" "lan" "staging" ]; };
+        media      = { zone = "lan";   targetHost = "192.168.1.189";  tags = [ "server" "lan" "media" ]; };
+        playground = { zone = "lan";   targetHost = "192.168.1.217";  tags = [ "server" "lan" "lab" ]; };
+        cloud1     = { zone = "cloud"; targetHost = "172.232.161.44"; tags = [ "server" "cloud" ]; };
       };
 
-      # Servers build against STABLE nixpkgs (nixos-25.11) — matching the boxes'
-      # current versions, so folding them in is zero version churn. The desktop
-      # (mkSystem above) stays on unstable.
-      mkServerSystem = host: nixpkgs-stable.lib.nixosSystem {
+      # Servers build against stable nixpkgs (nixos-25.11), matching the boxes'
+      # current versions, so zero version churn. The desktop stays on unstable.
+      mkServerSystem = name: meta: nixpkgs-stable.lib.nixosSystem {
         system = "x86_64-linux";
-        modules = serverModules host;
+        modules = serverModules name meta;
       };
 
-      mkColmenaNode = host: meta: { ... }: {
+      mkColmenaNode = name: meta: { ... }: {
         deployment = {
           targetHost = meta.targetHost;
           targetUser = "deploy";
           tags = meta.tags;
         };
-        imports = serverModules host;
+        imports = serverModules name meta;
       };
 
-      # mgmt — the LAN's DNS + PKI + SIEM box, folded in LAST and GATED. It does
-      # NOT take the fleet common.nix (its own base.nix owns SSH/firewall, and
-      # step-ca owns ACME — common.nix would fight both); it gets ONLY the deploy
-      # identity. Built against its pinned running nixpkgs for a churn-free cut.
+      # mgmt - the LAN's DNS + PKI + SIEM box, folded in last and gated. It does
+      # not take the fleet common.nix (its own base.nix owns SSH/firewall, and
+      # step-ca owns ACME - common.nix would fight both); it gets only the deploy
+      # identity. Built against its pinned nixpkgs for a churn-free cut.
       mgmtModules = [
         ./modules/deploy-user.nix
-        sops-nix.nixosModules.sops      # mgmt enrolls itself as a Wazuh agent → needs sops
-        ./modules/wazuh-agent.nix
-        ./hosts/mgmt/configuration.nix
+        sops-nix.nixosModules.sops      # mgmt needs sops (Grafana admin password)
+        ./modules/siem-lite.nix         # mgmt is the central Loki/Grafana/Alertmanager server
+        ./hosts/lan/mgmt/configuration.nix
       ];
       mkMgmtSystem = nixpkgs-mgmt.lib.nixosSystem {
         system = "x86_64-linux";
@@ -107,9 +110,9 @@
       };
     in {
       nixosConfigurations = {
-        nixos-kde = mkSystem { homeFile = ./hosts/gaming/home-kde.nix; };
+        nixos-kde = mkSystem { homeFile = ./hosts/workstation/desktop/home-kde.nix; };
         mgmt = mkMgmtSystem;
-      } // nixpkgs.lib.mapAttrs (host: _: mkServerSystem host) servers;
+      } // nixpkgs.lib.mapAttrs mkServerSystem servers;
 
       # --- Remote deploy from this desktop (the Colmena control node) ----------
       #   nix develop                          # shell with colmena + sops/age
@@ -120,7 +123,7 @@
         {
           meta = {
             nixpkgs = import nixpkgs-stable { system = "x86_64-linux"; };
-            # mgmt builds against its own pinned nixpkgs → churn-free cutover.
+            # mgmt builds against its own pinned nixpkgs -> churn-free cutover.
             nodeNixpkgs.mgmt = import nixpkgs-mgmt { system = "x86_64-linux"; };
           };
           mgmt = mkMgmtColmenaNode;
@@ -138,9 +141,5 @@
           pkgs.ssh-to-age
         ];
       };
-
-      # Out-of-nixpkgs packages, built against stable (where the servers run).
-      packages.x86_64-linux.wazuh-agent =
-        nixpkgs-stable.legacyPackages.x86_64-linux.callPackage ./pkgs/wazuh-agent { };
     };
 }

@@ -1,14 +1,12 @@
 # modules/common.nix
 #
-# Shared fleet baseline — imported by every server host (and eventually the
-# desktop). Keep this host-agnostic: hostname, users, and per-host ports live
-# in hosts/<name>/. The foundation tasks in "Project 1 - Nixify the Lab" will
-# grow this (internal-CA trust, Wazuh agent, sops) — start small and reusable.
+# Shared fleet baseline, imported by every server host. Keep it host-agnostic:
+# hostname, users, and per-host ports live in hosts/<zone>/<name>/.
 { lib, pkgs, ... }:
 
 {
   # The Colmena deploy identity (deploy user + trusted-user + scoped sudo) lives
-  # in its own module so mgmt can reuse JUST that without the rest of this file.
+  # in its own module so mgmt can reuse just that without the rest of this file.
   imports = [ ./deploy-user.nix ];
 
   # Flakes everywhere.
@@ -25,20 +23,22 @@
   };
 
   # --- Secrets (sops-nix) ---------------------------------------------------
-  # Each host decrypts its own secrets at activation using its SSH host key —
+  # Each host decrypts its own secrets at activation with its SSH host key -
   # no separate age key to distribute. (Recipients in .sops.yaml are each box's
-  # /etc/ssh/ssh_host_ed25519_key.pub run through ssh-to-age.) Requires the
-  # host's module set to also import sops-nix.nixosModules.sops (see flake.nix).
+  # ssh_host_ed25519_key.pub run through ssh-to-age.) Needs the host's module
+  # set to also import sops-nix.nixosModules.sops (see flake.nix).
   sops.age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];
 
-  # Trust mgmt's step-ca root + use its Harmonia binary cache + ACME endpoint.
-  # (Option defined in modules/internal-ca.nix, also in every server's module set.)
-  alcove.internalCa.enable = true;
-  alcove.internalCa.useCache = true; # cache.mgmt.lan serves a real cert now (2026-06-15)
+  # Trust mgmt's step-ca root + use its Harmonia cache + ACME endpoint.
+  # (Option defined in modules/internal-ca.nix.)
+  # mkDefault so an off-LAN host (cloud1) can opt out with a plain assignment.
+  # On-LAN hosts set nothing -> these stay true.
+  alcove.internalCa.enable = lib.mkDefault true;
+  alcove.internalCa.useCache = lib.mkDefault true; # cache.mgmt.lan serves a real cert now (2026-06-15)
 
-  # --- Firewall: nftables backend, deny-by-default, SSH open ----------------
-  # The stock installer leaves the firewall OFF. Every fleet host should have
-  # it on; 22 is the one port we always need (Colmena/SSH deploys).
+  # --- Firewall: nftables, deny-by-default, SSH open ----------------
+  # The stock installer leaves the firewall off. 22 is the one port we always
+  # need (Colmena/SSH deploys).
   networking.nftables.enable = true;
   networking.firewall = {
     enable = true;
@@ -46,10 +46,9 @@
   };
 
   # --- Server power policy: never sleep, ignore the lid ----------------------
-  # Fleet boxes live on a shelf, and some are laptops with the lid shut. Without
-  # a desktop session inhibiting it, logind would suspend on lid-close/idle and
-  # drop the host off the LAN. Disable sleep entirely, ignore lid + idle, and
-  # keep any Wi-Fi radio from powering down into unreachability.
+  # Some boxes are laptops with the lid shut. Without a desktop session to
+  # inhibit it, logind would suspend on lid-close/idle and drop the host off the
+  # LAN. Disable sleep, ignore lid + idle, and keep Wi-Fi from powering down.
   services.logind.settings.Login = {
     HandleLidSwitch = "ignore";
     HandleLidSwitchDocked = "ignore";

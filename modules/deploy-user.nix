@@ -1,16 +1,16 @@
 # modules/deploy-user.nix
 #
-# The Colmena remote-deploy identity, on its own so it can be imported WITHOUT
-# the rest of the opinionated fleet baseline (modules/common.nix). That matters
-# for `mgmt`, which is folded in faithfully (its own base.nix owns SSH/firewall/
-# ACME) and only needs this much to become Colmena-managed.
+# The Colmena remote-deploy identity, on its own so it can be imported without
+# the rest of the fleet baseline (modules/common.nix). That matters for mgmt,
+# which is folded in faithfully (its own base.nix owns SSH/firewall/ACME) and
+# only needs this much to become Colmena-managed.
 #
-# A dedicated, unprivileged `deploy` user — NOT a login/admin account. The
+# A dedicated, unprivileged `deploy` user - not a login/admin account. The
 # desktop (Colmena control node) connects as this user with its SSH key. It can
 # do exactly two privileged things and nothing else:
-#   1. receive unsigned closures over SSH  → it's a Nix `trusted-user`
-#   2. run the NixOS activation as root    → scoped NOPASSWD sudo below
-# So a stolen deploy key cannot open a general root shell — only re-activate a
+#   1. receive unsigned closures over SSH  -> it's a Nix `trusted-user`
+#   2. run the NixOS activation as root    -> scoped NOPASSWD sudo below
+# So a stolen deploy key can't open a general root shell - only re-activate a
 # system closure. Deploy by IP; the internal domain lives on mgmt (DNS).
 { ... }:
 

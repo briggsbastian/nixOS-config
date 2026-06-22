@@ -1,21 +1,20 @@
 # modules/media-hardening.nix
 #
-# systemd sandboxing for the *arr + Jellyfin services on `media`. The goal is to
-# drive each service's `systemd-analyze security` exposure score down without
-# breaking the stack — so this DELIBERATELY omits three otherwise-good options:
+# systemd sandboxing for the *arr + Jellyfin services on `media`. Drives each
+# service's `systemd-analyze security` score down without breaking the stack,
+# so it deliberately omits three otherwise-good options:
 #
-#   * MemoryDenyWriteExecute  — the *arr apps and Jellyfin are .NET (JIT), which
+#   * MemoryDenyWriteExecute  - the *arr apps and Jellyfin are .NET (JIT), which
 #                               needs W+X memory; enabling it kills them.
-#   * ProtectSystem = "strict"— the *arr WRITE into the NFS mount /mnt/media
+#   * ProtectSystem = "strict"- the *arr write into the NFS mount /mnt/media
 #                               (library moves/renames); "full" keeps /var + /mnt
 #                               writable. "strict" + ReadWritePaths is a later,
 #                               live-tested tightening (watch the NFS automount).
-#   * PrivateDevices = true   — Jellyfin needs /dev/dri (Intel QSV/VAAPI) to
+#   * PrivateDevices = true   - Jellyfin needs /dev/dri (Intel QSV/VAAPI) to
 #                               hardware-transcode.
 #
-# Everything below is the safe subset. Values are mkDefault so they never
-# conflict with (and never weaken) the hardening the nixpkgs service modules
-# already ship — the stricter definition wins.
+# Everything below is the safe subset. Values are mkDefault so they never weaken
+# the hardening the nixpkgs service modules already ship - the stricter wins.
 { lib, ... }:
 
 let
