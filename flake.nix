@@ -138,6 +138,13 @@
         // nixpkgs.lib.mapAttrs mkColmenaNode servers
       );
 
+      # NixOS VM tests, picked up by `nix flake check` (and therefore CI) with no
+      # workflow change -- the runner on hacktop advertises kvm + nixos-test, so
+      # the daemon can build and run them. Hermetic: no network, no real hosts.
+      checks.x86_64-linux = {
+        mgmt-ca = import ./tests/mgmt-ca.nix { inherit pkgs; };
+      };
+
       devShells.x86_64-linux.default = pkgs.mkShell {
         # colmena (deploy) + the sops/age toolchain (edit + re-key secrets).
         # sops auto-reads your admin key from ~/.config/sops/age/keys.txt.
