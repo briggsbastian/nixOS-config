@@ -50,6 +50,11 @@ rebuild-kde                        # or `upgrade`: bump, build, diff, confirm, s
 Review the closure diff before switching, especially the kernel. mgmt is frozen on
 purpose; bump `nixpkgs-mgmt` on its own, diff, and apply in a window.
 
+A scheduled Forgejo workflow (`.forgejo/workflows/lock-bump.yml`, weekly +
+`workflow_dispatch`) does the routine bump for you: it updates every input *except*
+the pinned `nixpkgs-mgmt`, builds all hosts, and opens a PR — no auto-merge. Review
+the diff and merge, then deploy as above.
+
 ## Garbage collection
 
 ```sh
@@ -107,8 +112,34 @@ Explore in Grafana (Explore -> Loki); the ruler alerts through Alertmanager to n
 (`ntfy.mgmt.lan/homelab-alerts`). Check which hosts report with
 `curl -s http://127.0.0.1:3100/loki/api/v1/label/host/values` on mgmt.
 
+Metrics and alerts: every LAN server runs a node_exporter (`:9100`, firewalled to
+mgmt only); mgmt's Prometheus scrapes them — targets derived from `fleet-hosts.nix`,
+the same map Colmena uses — and fires through the same Alertmanager -> ntfy path.
+The rules (`hosts/lan/mgmt/modules/monitoring.nix`) are `NodeDown`, `NodeDiskFull`
+(>85% on a real local fs), `NodeMemoryPressure`, `NodeSwapAlmostFull`,
+`SystemdUnitFailed`, and `CertExpiringSoon` — a blackbox probe of every
+`*.mgmt.lan` cert that fires 14 days before expiry, catching a silently-failed
+step-ca/lego renewal. cloud1 isn't scraped yet (public VPS, no private path to
+mgmt). See active alerts at `alerts.mgmt.lan`.
+
 Dashboards: Grafana, Uptime Kuma (`status.mgmt.lan`), ntopng (`ntop.mgmt.lan`),
 landing page (`mgmt.lan`).
+
+## Checks
+
+`nix flake check` evaluates every host + flake output, runs the fmt/lint gate, and
+runs the NixOS VM tests. CI (`.forgejo/workflows/ci.yml`) runs the same on every
+push; the hacktop runner advertises `kvm` + `nixos-test`, so it can build them.
+
+```sh
+nix flake check --show-trace               # everything (eval + lint + VM tests)
+nix build .#checks.x86_64-linux.mgmt-ca    # step-ca issues a cert + nginx serves TLS
+nix build .#checks.x86_64-linux.log-path   # Alloy ships a journal line into Loki
+nix fmt                                     # nixfmt + statix + deadnix (also a check)
+```
+
+The VM tests are hermetic (no network, no real hosts). `nix fmt` formats and lints
+the whole tree, and the same check (`checks.x86_64-linux.formatting`) gates CI.
 
 ## Backups
 
