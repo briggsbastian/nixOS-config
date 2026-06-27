@@ -42,6 +42,84 @@ in
         }) scrapedHosts;
       }
     ];
+
+    # Send fired metric alerts to the Alertmanager siem-lite.nix already runs on
+    # 127.0.0.1:9093 (the ntfy bridge lives there). Loki's ruler is already wired
+    # to the same Alertmanager for log alerts, so metrics + logs share one path
+    # out to ntfy.mgmt.lan/homelab-alerts.
+    alertmanagers = [
+      { static_configs = [ { targets = [ "127.0.0.1:9093" ]; } ]; }
+    ];
+
+    # Conservative host-metric alerts. Long `for:` windows so a single missed
+    # scrape or a transient spike doesn't page. instance = hostname (set in the
+    # scrape config above) so every alert names the box.
+    rules = [
+      ''
+        groups:
+          - name: fleet-node
+            rules:
+              # Host/exporter unreachable: down, crashed, or :9100 firewalled.
+              - alert: NodeDown
+                expr: up{job="node"} == 0
+                for: 5m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "node_exporter unreachable on {{ $labels.instance }}"
+                  description: "Prometheus has not scraped {{ $labels.instance }} for 5m (host down, exporter stopped, or :9100 blocked)."
+
+              # Any real local filesystem over 85% full. Network (nfs) + ephemeral
+              # (tmpfs/overlay/...) filesystems are excluded: the NAS is monitored
+              # at the NAS, and /mnt/media is an autofs automount node_exporter
+              # can't see reliably anyway.
+              - alert: NodeDiskFull
+                expr: |
+                  (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs|overlay|squashfs|fuse.*|nfs.*|autofs|devtmpfs|efivarfs"}
+                       / node_filesystem_size_bytes) > 0.85
+                for: 30m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Disk over 85% on {{ $labels.instance }} ({{ $labels.mountpoint }})"
+                  description: "{{ $labels.mountpoint }} on {{ $labels.instance }} is {{ $value | humanizePercentage }} full."
+
+              # Sustained low free memory (not a momentary spike).
+              - alert: NodeMemoryPressure
+                expr: node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes < 0.10
+                for: 15m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Low memory on {{ $labels.instance }}"
+                  description: "Under 10% memory available on {{ $labels.instance }} for 15m."
+
+              # Swap almost full. zram swap is *meant* to be used, so only a nearly
+              # exhausted swap (real pressure) fires, not mere swap activity.
+              - alert: NodeSwapAlmostFull
+                expr: |
+                  node_memory_SwapTotal_bytes > 0
+                  and (node_memory_SwapFree_bytes / node_memory_SwapTotal_bytes) < 0.10
+                for: 15m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Swap almost full on {{ $labels.instance }}"
+                  description: "Swap is over 90% used on {{ $labels.instance }} for 15m."
+
+              # Any systemd unit stuck in failed state (the exporter's systemd
+              # collector, enabled fleet-wide in modules/metrics.nix). 10m lets a
+              # unit that auto-restarts settle before paging.
+              - alert: SystemdUnitFailed
+                expr: node_systemd_unit_state{state="failed"} == 1
+                for: 10m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "systemd unit failed on {{ $labels.instance }}"
+                  description: "{{ $labels.name }} is in failed state on {{ $labels.instance }}."
+      ''
+    ];
   };
 
   services.grafana = {
