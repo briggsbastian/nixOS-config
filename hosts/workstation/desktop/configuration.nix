@@ -5,13 +5,13 @@
 { config, pkgs, ... }:
 
 {
-  imports =
-    [ # Include the results of the hardware scan.
-      ./hardware-configuration.nix
-      ./packages.nix
-      ./udev.nix
-      ../../../modules/internal-ca.nix # trust mgmt's step-ca root so *.mgmt.lan TLS verifies
-    ];
+  imports = [
+    # Include the results of the hardware scan.
+    ./hardware-configuration.nix
+    ./packages.nix
+    ./udev.nix
+    ../../../modules/internal-ca.nix # trust mgmt's step-ca root so *.mgmt.lan TLS verifies
+  ];
   # Bootloader.
   boot.loader.systemd-boot.enable = true;
   boot.loader.efi.canTouchEfiVariables = true;
@@ -24,7 +24,10 @@
   networking.networkmanager.enable = true;
   # Resolve *.mgmt.lan via mgmt's AdGuard; public resolver as fallback if mgmt is
   # down. Use a public-only list to keep desktop DNS off AdGuard's filtering.
-  networking.nameservers = ["192.168.1.222" "9.9.9.9"];
+  networking.nameservers = [
+    "192.168.1.222"
+    "9.9.9.9"
+  ];
   networking.networkmanager.dns = "none";
 
   # Trust mgmt's step-ca root so https://*.mgmt.lan verifies. Firefox needs
@@ -82,10 +85,16 @@
     isNormalUser = true;
     description = "briggs";
     shell = pkgs.zsh;
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+    ];
   };
   services.openssh.enable = true;
   networking.firewall.enable = false;
   system.stateVersion = "25.11"; # Did you read the comment?
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
 }

@@ -1,7 +1,7 @@
 # Snipe-IT - asset/inventory management at https://assets.mgmt.lan.
 # The module manages its own mysql and nginx vhost; first-run setup
 # wizard creates the admin account.
-{ ... }:
+_:
 
 {
   services.snipe-it = {

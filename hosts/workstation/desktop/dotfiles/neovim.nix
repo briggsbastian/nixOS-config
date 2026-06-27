@@ -1,6 +1,6 @@
-{inputs, pkgs, ...}:
+{ inputs, pkgs, ... }:
 {
-  imports = [inputs.nixvim.homeModules.nixvim];
+  imports = [ inputs.nixvim.homeModules.nixvim ];
   programs.nixvim = {
     enable = true;
     defaultEditor = true;
@@ -20,11 +20,11 @@
       colorizer.enable = true;
 
       # Git tooling.
-      gitsigns.enable = true;   # gutter hunks: stage/reset/preview, blame, hunk nav
-      lazygit.enable = true;    # full visual Git TUI (:LazyGit)
-      neogit.enable = true;     # Magit-style menu UI (:Neogit)
-      diffview.enable = true;   # side-by-side diffs, file history, conflict resolver
-      fugitive.enable = true;   # classic :Git / :Git blame
+      gitsigns.enable = true; # gutter hunks: stage/reset/preview, blame, hunk nav
+      lazygit.enable = true; # full visual Git TUI (:LazyGit)
+      neogit.enable = true; # Magit-style menu UI (:Neogit)
+      diffview.enable = true; # side-by-side diffs, file history, conflict resolver
+      fugitive.enable = true; # classic :Git / :Git blame
 
       # camouflage.nvim has no nixvim module; added via extraPlugins below instead.
       lsp = {
@@ -33,23 +33,87 @@
       };
     };
     keymaps = [
-      { mode = "n"; key = "<leader>ff"; action = "<cmd>Telescope find_files<cr>"; }
+      {
+        mode = "n";
+        key = "<leader>ff";
+        action = "<cmd>Telescope find_files<cr>";
+      }
 
       # Git UIs
-      { mode = "n"; key = "<leader>gg"; action = "<cmd>LazyGit<cr>";              options.desc = "LazyGit"; }
-      { mode = "n"; key = "<leader>gn"; action = "<cmd>Neogit<cr>";               options.desc = "Neogit"; }
-      { mode = "n"; key = "<leader>gd"; action = "<cmd>DiffviewOpen<cr>";         options.desc = "Diff: open"; }
-      { mode = "n"; key = "<leader>gq"; action = "<cmd>DiffviewClose<cr>";        options.desc = "Diff: close"; }
-      { mode = "n"; key = "<leader>gh"; action = "<cmd>DiffviewFileHistory %<cr>"; options.desc = "Diff: file history"; }
-      { mode = "n"; key = "<leader>gs"; action = "<cmd>Git<cr>";                  options.desc = "Fugitive status"; }
+      {
+        mode = "n";
+        key = "<leader>gg";
+        action = "<cmd>LazyGit<cr>";
+        options.desc = "LazyGit";
+      }
+      {
+        mode = "n";
+        key = "<leader>gn";
+        action = "<cmd>Neogit<cr>";
+        options.desc = "Neogit";
+      }
+      {
+        mode = "n";
+        key = "<leader>gd";
+        action = "<cmd>DiffviewOpen<cr>";
+        options.desc = "Diff: open";
+      }
+      {
+        mode = "n";
+        key = "<leader>gq";
+        action = "<cmd>DiffviewClose<cr>";
+        options.desc = "Diff: close";
+      }
+      {
+        mode = "n";
+        key = "<leader>gh";
+        action = "<cmd>DiffviewFileHistory %<cr>";
+        options.desc = "Diff: file history";
+      }
+      {
+        mode = "n";
+        key = "<leader>gs";
+        action = "<cmd>Git<cr>";
+        options.desc = "Fugitive status";
+      }
 
       # Hunks (gitsigns)
-      { mode = "n"; key = "<leader>hs"; action = "<cmd>Gitsigns stage_hunk<cr>";   options.desc = "Stage hunk"; }
-      { mode = "n"; key = "<leader>hr"; action = "<cmd>Gitsigns reset_hunk<cr>";   options.desc = "Reset hunk"; }
-      { mode = "n"; key = "<leader>hp"; action = "<cmd>Gitsigns preview_hunk<cr>"; options.desc = "Preview hunk"; }
-      { mode = "n"; key = "<leader>hb"; action = "<cmd>Gitsigns blame_line<cr>";   options.desc = "Blame line"; }
-      { mode = "n"; key = "]c";         action = "<cmd>Gitsigns next_hunk<cr>";    options.desc = "Next hunk"; }
-      { mode = "n"; key = "[c";         action = "<cmd>Gitsigns prev_hunk<cr>";    options.desc = "Prev hunk"; }
+      {
+        mode = "n";
+        key = "<leader>hs";
+        action = "<cmd>Gitsigns stage_hunk<cr>";
+        options.desc = "Stage hunk";
+      }
+      {
+        mode = "n";
+        key = "<leader>hr";
+        action = "<cmd>Gitsigns reset_hunk<cr>";
+        options.desc = "Reset hunk";
+      }
+      {
+        mode = "n";
+        key = "<leader>hp";
+        action = "<cmd>Gitsigns preview_hunk<cr>";
+        options.desc = "Preview hunk";
+      }
+      {
+        mode = "n";
+        key = "<leader>hb";
+        action = "<cmd>Gitsigns blame_line<cr>";
+        options.desc = "Blame line";
+      }
+      {
+        mode = "n";
+        key = "]c";
+        action = "<cmd>Gitsigns next_hunk<cr>";
+        options.desc = "Next hunk";
+      }
+      {
+        mode = "n";
+        key = "[c";
+        action = "<cmd>Gitsigns prev_hunk<cr>";
+        options.desc = "Prev hunk";
+      }
     ];
     extraConfigLua = ''
       vim.api.nvim_set_hl(0, "Normal", {bg = "none"})
@@ -94,4 +158,3 @@
     ];
   };
 }
-

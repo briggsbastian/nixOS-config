@@ -8,7 +8,12 @@
 #   |-- data/nzbget/               # NZBGet working + completed (tv/movies cats)
 #   `-- Media/                     # TV (Sonarr), Movies (Radarr), Books, etc.
 
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   # ---------- NAS mount ----------
@@ -95,7 +100,10 @@
   users.users.kavita.extraGroups = [ "users" ];
 
   # NZBGet + Kavita have no openFirewall option
-  networking.firewall.allowedTCPPorts = [ 6789 5000 ];
+  networking.firewall.allowedTCPPorts = [
+    6789
+    5000
+  ];
 
   # Every service that touches media data must wait for the NAS mount;
   # arrs start after the download client and indexer
@@ -105,15 +113,24 @@
     kavita.unitConfig.RequiresMountsFor = [ "/mnt/media" ];
     sonarr = {
       unitConfig.RequiresMountsFor = [ "/mnt/media" ];
-      after = [ "nzbget.service" "prowlarr.service" ];
+      after = [
+        "nzbget.service"
+        "prowlarr.service"
+      ];
     };
     radarr = {
       unitConfig.RequiresMountsFor = [ "/mnt/media" ];
-      after = [ "nzbget.service" "prowlarr.service" ];
+      after = [
+        "nzbget.service"
+        "prowlarr.service"
+      ];
     };
     bazarr = {
       unitConfig.RequiresMountsFor = [ "/mnt/media" ];
-      after = [ "sonarr.service" "radarr.service" ];
+      after = [
+        "sonarr.service"
+        "radarr.service"
+      ];
     };
   };
 }

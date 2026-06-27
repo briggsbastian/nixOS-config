@@ -9,7 +9,12 @@
 # per-user Tomcat under the removed secvm user. No VM connections yet (libvirt lab
 # unbuilt); add them in the UI. Port 8080 is opened below so it stays reachable
 # once the firewall is on. The lab itself is tracked in "Project 1 - Nixify the Lab".
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   imports = [

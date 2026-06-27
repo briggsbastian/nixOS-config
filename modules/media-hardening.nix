@@ -33,7 +33,12 @@ let
     RestrictNamespaces = true;
     RestrictRealtime = true;
     RestrictSUIDSGID = true;
-    RestrictAddressFamilies = [ "AF_INET" "AF_INET6" "AF_UNIX" "AF_NETLINK" ];
+    RestrictAddressFamilies = [
+      "AF_INET"
+      "AF_INET6"
+      "AF_UNIX"
+      "AF_NETLINK"
+    ];
     LockPersonality = true;
     SystemCallArchitectures = "native";
     CapabilityBoundingSet = "";
@@ -42,7 +47,14 @@ let
   };
 
   # The media-stack services (all defined in hosts/media/arr.nix).
-  hardenedServices = [ "jellyfin" "radarr" "sonarr" "prowlarr" "bazarr" "nzbget" ];
+  hardenedServices = [
+    "jellyfin"
+    "radarr"
+    "sonarr"
+    "prowlarr"
+    "bazarr"
+    "nzbget"
+  ];
 in
 {
   systemd.services = lib.genAttrs hardenedServices (_: {

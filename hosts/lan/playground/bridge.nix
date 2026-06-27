@@ -15,7 +15,7 @@
 { lib, pkgs, ... }:
 
 let
-  uplink    = "enp1s0";
+  uplink = "enp1s0";
   uplinkMac = "02:00:00:00:01:17"; # br0's pinned MAC: a stable locally-administered addr (any 02:* works)
 in
 {

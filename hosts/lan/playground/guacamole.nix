@@ -18,7 +18,12 @@
 # Initial web login is guacadmin / guacadmin (from 002-create-admin-user.sql) -
 # change it on first login. The sops guacamole_db_password is the Postgres role
 # password (DB connection), a different thing.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   jdbcPg = pkgs.callPackage ../../../pkgs/guacamole-auth-jdbc-postgresql { };

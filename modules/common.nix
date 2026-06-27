@@ -15,7 +15,10 @@
   ];
 
   # Flakes everywhere.
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
 
   # --- SSH: key-only, no root, no passwords ---------------------------------
   services.openssh = {

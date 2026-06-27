@@ -39,7 +39,11 @@
   users.users.mgmt = {
     isNormalUser = true;
     description = "mgmt";
-    extraGroups = [ "networkmanager" "wheel" "docker" ];
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+      "docker"
+    ];
   };
 
   # mgmt skips common.nix, so wire sops here (for the grafana password below)
@@ -53,7 +57,7 @@
   alcove.siemLite.server = {
     enable = true;
     grafanaAdminPasswordFile = config.sops.secrets.grafana_admin_password.path;
-    alertmanagerExternalUrl = "https://alerts.mgmt.lan";  # vhost in nginx.nix
+    alertmanagerExternalUrl = "https://alerts.mgmt.lan"; # vhost in nginx.nix
     # alerts go to ntfy.mgmt.lan/homelab-alerts (subscribe a phone there)
   };
 

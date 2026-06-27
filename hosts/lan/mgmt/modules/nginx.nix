@@ -5,17 +5,16 @@
 { lib, ... }:
 
 let
-  proxy = upstream: extra:
-    lib.recursiveUpdate
-      {
-        forceSSL = true;
-        enableACME = true;
-        locations."/" = {
-          proxyPass = upstream;
-          proxyWebsockets = true;
-        };
-      }
-      extra;
+  proxy =
+    upstream: extra:
+    lib.recursiveUpdate {
+      forceSSL = true;
+      enableACME = true;
+      locations."/" = {
+        proxyPass = upstream;
+        proxyWebsockets = true;
+      };
+    } extra;
 in
 {
   services.nginx = {

@@ -1,7 +1,12 @@
 # Metrics + uptime + landing page: Prometheus scrapes node_exporter,
 # Grafana visualizes, Uptime Kuma probes the services, Homepage links it
 # all together at https://mgmt.lan.
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   # Scrape targets come from the same host map flake.nix uses for Colmena
@@ -16,7 +21,9 @@ let
   # itself (step-ca.nix pins *.mgmt.lan -> 192.168.1.222 in /etc/hosts), so the
   # probe stays on-box.
   blackboxPort = 9115;
-  acmeVhosts = lib.attrNames (lib.filterAttrs (_: v: v.enableACME) config.services.nginx.virtualHosts);
+  acmeVhosts = lib.attrNames (
+    lib.filterAttrs (_: v: v.enableACME) config.services.nginx.virtualHosts
+  );
   certProbeTargets = map (h: "https://${h}") acmeVhosts;
 
   # blackbox prober that just completes a TLS handshake so probe_ssl_* is
@@ -251,11 +258,26 @@ in
       useEqualHeights = true;
       hideVersion = true;
       layout = {
-        Security       = { style = "row"; columns = 2; };
-        Observability  = { style = "row"; columns = 3; };
-        Infrastructure = { style = "row"; columns = 3; };
-        Media          = { style = "row"; columns = 3; };
-        Lab            = { style = "row"; columns = 2; };
+        Security = {
+          style = "row";
+          columns = 2;
+        };
+        Observability = {
+          style = "row";
+          columns = 3;
+        };
+        Infrastructure = {
+          style = "row";
+          columns = 3;
+        };
+        Media = {
+          style = "row";
+          columns = 3;
+        };
+        Lab = {
+          style = "row";
+          columns = 2;
+        };
       };
     };
     # header bar: live host resources + a clock
@@ -271,110 +293,154 @@ in
       {
         datetime = {
           text_size = "xl";
-          format = { dateStyle = "long"; timeStyle = "short"; hour12 = true; };
+          format = {
+            dateStyle = "long";
+            timeStyle = "short";
+            hour12 = true;
+          };
         };
       }
     ];
     services = [
       {
         "Security" = [
-          { "AdGuard Home" = {
+          {
+            "AdGuard Home" = {
               href = "https://adguard.mgmt.lan";
               description = "DNS filtering for the LAN";
-            }; }
+            };
+          }
         ];
       }
       {
         "Observability" = [
-          { "Grafana" = {
+          {
+            "Grafana" = {
               href = "https://grafana.mgmt.lan";
               description = "Metrics + log dashboards (Prometheus + Loki)";
-            }; }
-          { "Logs (Explore)" = {
+            };
+          }
+          {
+            "Logs (Explore)" = {
               href = "https://grafana.mgmt.lan/explore";
               description = "Search the fleet's journals in Loki";
-            }; }
-          { "Alertmanager" = {
+            };
+          }
+          {
+            "Alertmanager" = {
               href = "https://alerts.mgmt.lan";
               description = "Fired alerts - view, silence, routing";
-            }; }
-          { "ntfy" = {
+            };
+          }
+          {
+            "ntfy" = {
               href = "https://ntfy.mgmt.lan";
               description = "Push alerts - subscribe to /homelab-alerts";
-            }; }
-          { "Uptime Kuma" = {
+            };
+          }
+          {
+            "Uptime Kuma" = {
               href = "https://status.mgmt.lan";
               description = "Service uptime monitoring";
-            }; }
-          { "ntopng" = {
+            };
+          }
+          {
+            "ntopng" = {
               href = "https://ntop.mgmt.lan";
               description = "Network traffic analysis";
-            }; }
+            };
+          }
         ];
       }
       {
         "Infrastructure" = [
-          { "NetBox" = {
+          {
+            "NetBox" = {
               href = "https://netbox.mgmt.lan";
               description = "IPAM & network documentation";
-            }; }
-          { "Forgejo" = {
+            };
+          }
+          {
+            "Forgejo" = {
               href = "https://git.mgmt.lan";
               description = "Git hosting";
-            }; }
-          { "Snipe-IT" = {
+            };
+          }
+          {
+            "Snipe-IT" = {
               href = "https://assets.mgmt.lan";
               description = "Asset inventory";
-            }; }
-          { "Root CA cert" = {
+            };
+          }
+          {
+            "Root CA cert" = {
               href = "https://ca.mgmt.lan/root.crt";
               description = "Install on devices to trust *.mgmt.lan";
-            }; }
-          { "Nix cache pubkey" = {
+            };
+          }
+          {
+            "Nix cache pubkey" = {
               href = "https://cache.mgmt.lan/pubkey";
               description = "Binary cache at https://cache.mgmt.lan";
-            }; }
+            };
+          }
         ];
       }
       {
         # Direct IP:port - these run on the media/lab hosts, not behind mgmt's nginx.
         "Media" = [
-          { "Jellyfin" = {
+          {
+            "Jellyfin" = {
               href = "http://192.168.1.189:8096";
               description = "Media streaming";
-            }; }
-          { "Radarr" = {
+            };
+          }
+          {
+            "Radarr" = {
               href = "http://192.168.1.189:7878";
               description = "Movies";
-            }; }
-          { "Sonarr" = {
+            };
+          }
+          {
+            "Sonarr" = {
               href = "http://192.168.1.189:8989";
               description = "TV shows";
-            }; }
-          { "Prowlarr" = {
+            };
+          }
+          {
+            "Prowlarr" = {
               href = "http://192.168.1.189:9696";
               description = "Indexer manager";
-            }; }
-          { "Bazarr" = {
+            };
+          }
+          {
+            "Bazarr" = {
               href = "http://192.168.1.189:6767";
               description = "Subtitles";
-            }; }
-          { "NZBGet" = {
+            };
+          }
+          {
+            "NZBGet" = {
               href = "http://192.168.1.189:6789";
               description = "Usenet downloader";
-            }; }
-          { "Kavita" = {
+            };
+          }
+          {
+            "Kavita" = {
               href = "http://192.168.1.189:5000";
               description = "Books, comics & manga";
-            }; }
+            };
+          }
         ];
       }
       {
         "Lab" = [
-          { "Guacamole" = {
+          {
+            "Guacamole" = {
               href = "http://192.168.1.217:8080/guacamole/";
               description = "Browser remote-desktop gateway (RDP/VNC/SSH)";
-            }; }
+            };
+          }
         ];
       }
     ];

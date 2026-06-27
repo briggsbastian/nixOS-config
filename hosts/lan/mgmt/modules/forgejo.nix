@@ -4,7 +4,7 @@
 #     forgejo --config /var/lib/forgejo/custom/conf/app.ini \
 #     admin user create --username briggs --random-password \
 #     --email admin@mgmt.lan --admin'
-{ ... }:
+_:
 
 {
   services.forgejo = {

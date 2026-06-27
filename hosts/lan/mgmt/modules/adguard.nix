@@ -2,7 +2,7 @@
 # nginx can route by name. Web UI on localhost:3000 via https://adguard.mgmt.lan.
 # Settings below are just the seed (mutableSettings = true) - manage it from the
 # web UI once it's up.
-{ ... }:
+_:
 
 {
   services.adguardhome = {
@@ -22,15 +22,30 @@
           "9.9.9.9"
           "1.1.1.1"
         ];
-        bootstrap_dns = [ "9.9.9.9" "1.1.1.1" ];
+        bootstrap_dns = [
+          "9.9.9.9"
+          "1.1.1.1"
+        ];
       };
       # "enabled" must be explicit; AdGuard defaults a missing field to false
       filtering.rewrites = [
-        { domain = "mgmt.lan";   answer = "192.168.1.222"; enabled = true; }
-        { domain = "*.mgmt.lan"; answer = "192.168.1.222"; enabled = true; }
+        {
+          domain = "mgmt.lan";
+          answer = "192.168.1.222";
+          enabled = true;
+        }
+        {
+          domain = "*.mgmt.lan";
+          answer = "192.168.1.222";
+          enabled = true;
+        }
         # playground is a separate host (.217); exact name beats the
         # *.mgmt.lan wildcard, so it resolves to the box not mgmt.
-        { domain = "playground.mgmt.lan"; answer = "192.168.1.217"; enabled = true; }
+        {
+          domain = "playground.mgmt.lan";
+          answer = "192.168.1.217";
+          enabled = true;
+        }
       ];
       filters = [
         {

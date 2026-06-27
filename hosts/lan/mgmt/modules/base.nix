@@ -4,7 +4,14 @@
 
 {
   environment.systemPackages = with pkgs; [
-    git neovim btop tmux curl wget docker-compose dig
+    git
+    neovim
+    btop
+    tmux
+    curl
+    wget
+    docker-compose
+    dig
   ];
 
   services.openssh.enable = true;
@@ -18,10 +25,10 @@
   networking.firewall = {
     enable = true;
     allowedTCPPorts = [
-      22    # ssh
-      53    # adguard dns
-      80    # nginx (redirects to 443)
-      443   # nginx
+      22 # ssh
+      53 # adguard dns
+      80 # nginx (redirects to 443)
+      443 # nginx
     ];
     allowedUDPPorts = [ 53 ];
   };
@@ -36,7 +43,10 @@
   # headroom on 15GB RAM for the native siem-lite + services
   zramSwap.enable = true;
 
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
   nix.gc = {
     automatic = true;
     dates = "weekly";

@@ -15,8 +15,14 @@
   systemd.services.netbox-secret = {
     description = "Generate NetBox secret key";
     wantedBy = [ "multi-user.target" ];
-    before = [ "netbox.service" "netbox-rq.service" ];
-    requiredBy = [ "netbox.service" "netbox-rq.service" ];
+    before = [
+      "netbox.service"
+      "netbox-rq.service"
+    ];
+    requiredBy = [
+      "netbox.service"
+      "netbox-rq.service"
+    ];
     serviceConfig = {
       Type = "oneshot";
       RemainAfterExit = true;

@@ -5,7 +5,12 @@
 # baseline (key-only SSH, nftables w/ 22, deploy user, zsh, sops, step-ca root
 # trust) comes from ../../../modules/common.nix via serverModules in flake.nix;
 # this file holds only what's cloud-specific.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   imports = [

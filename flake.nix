@@ -1,24 +1,48 @@
 {
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    home-manager = { url = "github:nix-community/home-manager"; inputs.nixpkgs.follows = "nixpkgs"; };
-    nix-flatpak = { url = "github:gmodena/nix-flatpak"; };
-    nixvim = { url = "github:nix-community/nixvim"; };
-    claude-code = {url = "github:sadjow/claude-code-nix"; };
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    nix-flatpak = {
+      url = "github:gmodena/nix-flatpak";
+    };
+    nixvim = {
+      url = "github:nix-community/nixvim";
+    };
+    claude-code = {
+      url = "github:sadjow/claude-code-nix";
+    };
     # Claude Desktop GUI client (community repackage; no official Linux build).
     # Only the gaming host uses it; servers never reference it.
     # follows nixpkgs-stable (25.11), not unstable: needs nodePackages.asar,
     # which unstable dropped 2026-03-03. stable still has it and we already fetch
     # that tree for the servers, so no extra nixpkgs in the lock.
-    claude-desktop = { url = "github:k3d3/claude-desktop-linux-flake"; inputs.nixpkgs.follows = "nixpkgs-stable"; };
-    colmena = { url = "github:zhaofengli/colmena"; inputs.nixpkgs.follows = "nixpkgs"; };
-    sops-nix = { url = "github:Mic92/sops-nix"; inputs.nixpkgs.follows = "nixpkgs"; };
+    claude-desktop = {
+      url = "github:k3d3/claude-desktop-linux-flake";
+      inputs.nixpkgs.follows = "nixpkgs-stable";
+    };
+    colmena = {
+      url = "github:zhaofengli/colmena";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # Dev tooling: nix fmt + lint (nixfmt + statix + deadnix) as `nix fmt` and a
     # flake check. follows nixpkgs so it adds no second tree to the lock.
-    treefmt-nix = { url = "github:numtide/treefmt-nix"; inputs.nixpkgs.follows = "nixpkgs"; };
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     # disko - declarative disk partitioning, for the first nixos-anywhere
     # install (cloud1). follows nixpkgs-stable like the servers.
-    disko = { url = "github:nix-community/disko"; inputs.nixpkgs.follows = "nixpkgs-stable"; };
+    disko = {
+      url = "github:nix-community/disko";
+      inputs.nixpkgs.follows = "nixpkgs-stable";
+    };
     # desktop tracks nixpkgs (unstable); servers track stable (nixos-25.11,
     # what the boxes already run, so zero version churn).
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
@@ -28,27 +52,43 @@
     nixpkgs-mgmt.url = "github:NixOS/nixpkgs/755f5aa91337890c432639c60b6064bb7fe67769";
   };
 
-  outputs = inputs @ {self, home-manager, nix-flatpak, nixvim, nixpkgs, nixpkgs-stable, nixpkgs-mgmt, claude-code, colmena, sops-nix, treefmt-nix, ...}:
+  outputs =
+    inputs@{
+      self,
+      home-manager,
+      nix-flatpak,
+      nixvim,
+      nixpkgs,
+      nixpkgs-stable,
+      nixpkgs-mgmt,
+      claude-code,
+      colmena,
+      sops-nix,
+      treefmt-nix,
+      ...
+    }:
     let
       # Single source of truth for host -> LAN IP, shared with mgmt's Prometheus
       # scrape config (hosts/lan/mgmt/modules/monitoring.nix) so the deploy host
       # list and the metrics scrape list can't drift. See fleet-hosts.nix.
       fleetHosts = import ./fleet-hosts.nix;
 
-      mkSystem = { homeFile }: nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        modules = [
-          ./hosts/workstation/desktop/configuration.nix
-          home-manager.nixosModules.home-manager
-          nix-flatpak.nixosModules.nix-flatpak
-          {
-            home-manager.useGlobalPkgs = true;
-            home-manager.useUserPackages = true;
-            home-manager.extraSpecialArgs = { inherit inputs; };
-            home-manager.users.briggs = import homeFile;
-          }
-        ];
-      };
+      mkSystem =
+        { homeFile }:
+        nixpkgs.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = [
+            ./hosts/workstation/desktop/configuration.nix
+            home-manager.nixosModules.home-manager
+            nix-flatpak.nixosModules.nix-flatpak
+            {
+              home-manager.useGlobalPkgs = true;
+              home-manager.useUserPackages = true;
+              home-manager.extraSpecialArgs = { inherit inputs; };
+              home-manager.users.briggs = import homeFile;
+            }
+          ];
+        };
 
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
 
@@ -76,7 +116,7 @@
         ./modules/internal-ca.nix
         ./modules/siem-lite.nix
         sops-nix.nixosModules.sops
-        inputs.disko.nixosModules.disko   # inert unless the host sets disko.devices (only cloud1 does)
+        inputs.disko.nixosModules.disko # inert unless the host sets disko.devices (only cloud1 does)
         ./hosts/${meta.zone}/${name}/configuration.nix
       ];
 
@@ -90,24 +130,57 @@
       # IPs come from fleetHosts (above) so they're defined once; zone + tags stay
       # here as they're deploy-only (zone is also the hosts/<zone>/<name>/ subdir).
       servers = {
-        hacktop    = { zone = "lan";   targetHost = fleetHosts.hacktop.ip;    tags = [ "server" "lan" "staging" ]; };
-        media      = { zone = "lan";   targetHost = fleetHosts.media.ip;      tags = [ "server" "lan" "media" ]; };
-        playground = { zone = "lan";   targetHost = fleetHosts.playground.ip; tags = [ "server" "lan" "lab" ]; };
-        cloud1     = { zone = "cloud"; targetHost = fleetHosts.cloud1.ip;     tags = [ "server" "cloud" ]; };
+        hacktop = {
+          zone = "lan";
+          targetHost = fleetHosts.hacktop.ip;
+          tags = [
+            "server"
+            "lan"
+            "staging"
+          ];
+        };
+        media = {
+          zone = "lan";
+          targetHost = fleetHosts.media.ip;
+          tags = [
+            "server"
+            "lan"
+            "media"
+          ];
+        };
+        playground = {
+          zone = "lan";
+          targetHost = fleetHosts.playground.ip;
+          tags = [
+            "server"
+            "lan"
+            "lab"
+          ];
+        };
+        cloud1 = {
+          zone = "cloud";
+          targetHost = fleetHosts.cloud1.ip;
+          tags = [
+            "server"
+            "cloud"
+          ];
+        };
       };
 
       # Servers build against stable nixpkgs (nixos-25.11), matching the boxes'
       # current versions, so zero version churn. The desktop stays on unstable.
-      mkServerSystem = name: meta: nixpkgs-stable.lib.nixosSystem {
-        system = "x86_64-linux";
-        modules = serverModules name meta;
-      };
+      mkServerSystem =
+        name: meta:
+        nixpkgs-stable.lib.nixosSystem {
+          system = "x86_64-linux";
+          modules = serverModules name meta;
+        };
 
       mkColmenaNode = name: meta: { ... }: {
         deployment = {
-          targetHost = meta.targetHost;
+          inherit (meta) targetHost;
           targetUser = "deploy";
-          tags = meta.tags;
+          inherit (meta) tags;
         };
         imports = serverModules name meta;
       };
@@ -118,8 +191,8 @@
       # identity. Built against its pinned nixpkgs for a churn-free cut.
       mgmtModules = [
         ./modules/deploy-user.nix
-        sops-nix.nixosModules.sops      # mgmt needs sops (Grafana admin password)
-        ./modules/siem-lite.nix         # mgmt is the central Loki/Grafana/Alertmanager server
+        sops-nix.nixosModules.sops # mgmt needs sops (Grafana admin password)
+        ./modules/siem-lite.nix # mgmt is the central Loki/Grafana/Alertmanager server
         ./hosts/lan/mgmt/configuration.nix
       ];
       mkMgmtSystem = nixpkgs-mgmt.lib.nixosSystem {
@@ -130,15 +203,21 @@
         deployment = {
           targetHost = fleetHosts.mgmt.ip;
           targetUser = "deploy";
-          tags = [ "server" "mgmt" "gated" ];
+          tags = [
+            "server"
+            "mgmt"
+            "gated"
+          ];
         };
         imports = mgmtModules;
       };
-    in {
+    in
+    {
       nixosConfigurations = {
         nixos-kde = mkSystem { homeFile = ./hosts/workstation/desktop/home-kde.nix; };
         mgmt = mkMgmtSystem;
-      } // nixpkgs.lib.mapAttrs mkServerSystem servers;
+      }
+      // nixpkgs.lib.mapAttrs mkServerSystem servers;
 
       # --- Remote deploy from this desktop (the Colmena control node) ----------
       #   nix develop                          # shell with colmena + sops/age
