@@ -143,6 +143,7 @@
       # the daemon can build and run them. Hermetic: no network, no real hosts.
       checks.x86_64-linux = {
         mgmt-ca = import ./tests/mgmt-ca.nix { inherit pkgs; };
+        log-path = import ./tests/log-path.nix { inherit pkgs; };
       };
 
       devShells.x86_64-linux.default = pkgs.mkShell {
