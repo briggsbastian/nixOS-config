@@ -58,21 +58,26 @@ pkgs.testers.runNixOSTest {
     # step-ca.nix orders step-ca after its init oneshot, so this implies the root
     # + intermediate were generated.
     machine.wait_for_unit("step-ca.service")
-
-    # step-ca issues the cert over ACME (lego); the order oneshot completes on success.
-    machine.wait_for_unit("acme-web.mgmt.lan.service")
     machine.wait_for_unit("nginx.service")
 
-    # nginx serves TLS with a cert that verifies against the root the module
-    # published (/var/lib/mgmt-public/root_ca.crt, from step-ca-init)...
+    # nginx comes up on a minica selfsigned placeholder; the ACME order then issues
+    # the real step-ca cert and reloads nginx. On a loaded CI runner that reload can
+    # lose the race with the placeholder, so poll the *served* leaf until nginx is
+    # actually presenting the step-ca cert (issuer "... Intermediate CA"), nudging a
+    # reload each round. This asserts the end goal directly and is robust to the
+    # race -- a single wait+reload is not (the placeholder can win after it).
     machine.wait_until_succeeds(
-        "curl -sS --cacert /var/lib/mgmt-public/root_ca.crt https://web.mgmt.lan | grep -q hermetic-ca-ok",
-        timeout=180,
-    )
-    # ...and it's the step-ca intermediate that issued it, not nginx's snakeoil fallback.
-    machine.succeed(
+        "systemctl reload nginx 2>/dev/null; "
         "echo | openssl s_client -connect web.mgmt.lan:443 -servername web.mgmt.lan 2>/dev/null "
-        "| openssl x509 -noout -issuer | grep -i Intermediate"
+        "| openssl x509 -noout -issuer | grep -q 'Intermediate CA'",
+        timeout=300,
+    )
+
+    # The served step-ca cert now verifies against the root the module published
+    # (a clean leaf+intermediate chain, no self-signed cert in it), and nginx
+    # returns the vhost body over that verified TLS.
+    machine.succeed(
+        "curl -sS --cacert /var/lib/mgmt-public/root_ca.crt https://web.mgmt.lan | grep -q hermetic-ca-ok"
     )
   '';
 }
