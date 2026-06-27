@@ -1,0 +1,30 @@
+<!--
+  hosts/lan/playground/mal-isolated.xml — ISOLATED libvirt network for malware
+  analysis. No <forward> element = host-only: libvirt creates its own bridge
+  (virmal0) with NO enslaved physical uplink and NO NAT, so guests on it have no
+  L2/L3 path to the LAN or the internet. This is the strongest isolation (it does
+  not depend on iptables / bridge-nf state) and is the network REMnux's victim VM
+  detonates on. REMnux sits here as the fake-internet (INetSim/FakeDNS) gateway.
+
+  No <dhcp> on purpose: guests are statically addressed (REMnux 10.13.37.10, victim
+  10.13.37.20, …) so REMnux can own DHCP/DNS via INetSim during detonation. The
+  host takes .1 (handy for virsh diagnostics; not a route off-host).
+
+  IMPERATIVE libvirt state (not managed by NixOS), kept here as the source of
+  truth. Define once, as the `playground` user (in the libvirtd group):
+
+    virsh -c qemu:///system net-define   hosts/lan/playground/mal-isolated.xml
+    virsh -c qemu:///system net-autostart mal-isolated
+    virsh -c qemu:///system net-start    mal-isolated
+
+  A guest NIC then references it:
+    <interface type='network'>
+      <source network='mal-isolated'/>
+      <model type='virtio'/>
+    </interface>
+-->
+<network>
+  <name>mal-isolated</name>
+  <bridge name='virmal0' stp='on' delay='0'/>
+  <ip address='10.13.37.1' netmask='255.255.255.0'/>
+</network>

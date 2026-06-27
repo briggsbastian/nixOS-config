@@ -1,4 +1,4 @@
-# hosts/playground/bridge.nix
+# hosts/lan/playground/bridge.nix
 #
 # br0 - a Linux bridge enslaving the single wired uplink (enp1s0) so libvirt/KVM
 # guests sit on the LAN (their reserved MACs pull their reserved DHCP leases) and

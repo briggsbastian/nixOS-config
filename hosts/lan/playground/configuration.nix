@@ -1,14 +1,16 @@
-# hosts/playground/configuration.nix
+# hosts/lan/playground/configuration.nix
 #
-# playground - AMD box / NVMe 465G. Security lab host (future libvirt host for the
-# Kali/Parrot/REMnux/FlareVM lab) + Guacamole remote-desktop gateway. Adopted from
-# the channel install; baseline (key-only SSH, nftables w/ 22, deploy user, sops,
-# flakes, zsh) is in ../../../modules/common.nix.
+# playground - AMD box / NVMe 465G. Security lab host: the libvirt/KVM host for the
+# Kali/Parrot/REMnux/FlareVM lab (see ./libvirt.nix) + Guacamole remote-desktop
+# gateway. Adopted from the channel install; baseline (key-only SSH, nftables w/ 22,
+# deploy user, sops, flakes, zsh) is in ../../../modules/common.nix.
 #
 # Guacamole is declarative now (see ./guacamole.nix), replacing the old imperative
-# per-user Tomcat under the removed secvm user. No VM connections yet (libvirt lab
-# unbuilt); add them in the UI. Port 8080 is opened below so it stays reachable
-# once the firewall is on. The lab itself is tracked in "Project 1 - Nixify the Lab".
+# per-user Tomcat under the removed secvm user. VM connections are NOT auto-discovered
+# from libvirt — add each as a VNC connection in the UI (host `localhost`, port =
+# `5900 + virsh vncdisplay <vm>`); REMnux is built + connected, the rest as you build
+# them. Port 8080 is opened below so it stays reachable once the firewall is on. The
+# lab itself is tracked in "Project 1 - Nixify the Lab".
 { config, pkgs, lib, ... }:
 
 {

@@ -1,8 +1,19 @@
 <!--
-  remnux — REMnux malware-analysis appliance on lan-br0 (= br0).
+  remnux — REMnux malware-analysis appliance.
   Built from the official REMnux OVA → vmdk → qcow2 (see ./README.md).
   The OVA is BIOS; keep <os> as-is (no UEFI). Default login: remnux / malware.
     virsh -c qemu:///system define remnux.xml && virsh -c qemu:///system start remnux
+
+  NETWORKING — dual-homed by design (see ../mal-isolated.xml):
+    NIC1 mal-isolated  (…b0:03) — PRIMARY analysis net, always up. Air-gapped
+                                   host-only net; REMnux runs INetSim here as the
+                                   fake-internet/DNS gateway for the victim VM.
+                                   Give REMnux a static 10.13.37.10/24 in-guest.
+    NIC2 lan-br0       (…b0:13) — LAN/internet, <link state='down'/> BY DEFAULT.
+                                   Updates only: `virsh domif-setlink remnux
+                                   52:54:00:1a:b0:13 up`, run `remnux upgrade`,
+                                   then `… down` again, and snapshot. NEVER raise
+                                   it while a live sample is present.
 -->
 <domain type='kvm'>
   <name>remnux</name>
@@ -23,10 +34,18 @@
       <source file='/var/lib/libvirt/images/remnux.qcow2'/>
       <target dev='vda' bus='virtio'/>
     </disk>
+    <!-- NIC1: PRIMARY — isolated analysis network (always up). -->
     <interface type='network'>
-      <source network='lan-br0'/>
+      <source network='mal-isolated'/>
       <mac address='52:54:00:1a:b0:03'/>
       <model type='virtio'/>
+    </interface>
+    <!-- NIC2: LAN/internet for tool updates ONLY — administratively down by default. -->
+    <interface type='network'>
+      <source network='lan-br0'/>
+      <mac address='52:54:00:1a:b0:13'/>
+      <model type='virtio'/>
+      <link state='down'/>
     </interface>
     <graphics type='vnc' port='-1' listen='127.0.0.1'/>
     <video><model type='virtio'/></video>

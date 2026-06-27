@@ -1,5 +1,6 @@
 <!--
-  flarevm — Windows malware-analysis box (FLARE-VM) on lan-br0 (= br0).
+  flarevm — Windows malware-analysis box (FLARE-VM) on mal-isolated (the victim;
+  air-gapped from the LAN — see ../mal-isolated.xml).
   MANUAL build: install Windows 10/11 from an ISO, then run the FLARE-VM script
   (see ./README.md). No license needed — use a local account, skip activation.
   Requires UEFI + TPM 2.0 (Win11). swtpm is enabled in ../libvirt.nix.
@@ -39,8 +40,12 @@
       <readonly/>
     </disk>
     -->
+    <!-- VICTIM NIC: mal-isolated ONLY (see ../mal-isolated.xml) so a detonated
+         sample can never reach the LAN/internet. Static-address it in-guest on
+         10.13.37.20/24 with REMnux (10.13.37.10) as gateway+DNS (INetSim). Do NOT
+         attach a lan-br0 NIC to this box. -->
     <interface type='network'>
-      <source network='lan-br0'/>
+      <source network='mal-isolated'/>
       <mac address='52:54:00:1a:b0:04'/>
       <model type='e1000e'/>  <!-- Windows has an e1000e driver out of the box; swap to virtio + virtio-win later -->
     </interface>

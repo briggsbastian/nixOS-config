@@ -27,7 +27,7 @@ pool is root-owned): `ssh playground@192.168.1.217`, then `sudo` as shown.
 cd /var/lib/libvirt/images          # sudo for writes here
 # 1. fetch + convert the image to <name>.qcow2 (per-VM below)
 # 2. define + start from the committed XML:
-virsh -c qemu:///system define /etc/nixos/hosts/playground/domains/<name>.xml
+virsh -c qemu:///system define /etc/nixos/hosts/lan/playground/domains/<name>.xml
 virsh -c qemu:///system start <name>
 virsh -c qemu:///system list                       # Running?
 # 3. open the console in Guacamole (VNC) and finish setup
@@ -41,6 +41,55 @@ XML `<os>` to UEFI: `<os firmware='efi'>…</os>`. FlareVM is already UEFI.
 table, or from another host `arp -n | grep <mac>`. For a stable address, add a
 DHCP reservation on the router for the guest's MAC (the `52:54:00:1a:b0:0X` in
 each XML). `ssh kali` works once you enable sshd in the guest + add a host entry.
+
+---
+
+## Network isolation & safe detonation
+
+Two libvirt networks exist on this host:
+
+- **`lan-br0`** (`../lan-br0.xml`) — `forward=bridge`: guests become first-class
+  hosts on the home LAN (`192.168.1.0/24`). Convenient, but **anything detonated on
+  it can scan/spread/phone-home across the whole network.** Fine for tools you never
+  *run* live (Kali, Parrot, your own boxes), wrong for live malware.
+- **`mal-isolated`** (`../mal-isolated.xml`) — no `<forward>`: a host-only bridge
+  (`virmal0`) with **no uplink and no NAT**, so guests have no path to the LAN or
+  internet at all. This is where malware runs.
+
+Define the isolated net once (idempotent):
+```sh
+sudo virsh -c qemu:///system net-define   /path/to/mal-isolated.xml
+sudo virsh -c qemu:///system net-autostart mal-isolated
+sudo virsh -c qemu:///system net-start     mal-isolated
+sudo virsh -c qemu:///system net-list --all          # mal-isolated + lan-br0 active?
+```
+
+**Detonation pattern:** REMnux + a victim VM both on `mal-isolated`, statically
+addressed (REMnux `10.13.37.10`, victim `10.13.37.20`, gateway/DNS = REMnux). On
+REMnux, run **INetSim** (`sudo inetsim`) so the sample's callbacks resolve into a
+fake internet instead of the real one. The victim's default route + DNS point at
+`10.13.37.10`. The victim has **no** `lan-br0` NIC — ever.
+
+**REMnux's LAN NIC is a deliberate foot-gun, kept down:** REMnux is dual-homed
+(NIC1 `mal-isolated` up; NIC2 `lan-br0` `<link state='down'/>`). Raise the LAN NIC
+ONLY to update tooling, with no live sample present:
+```sh
+sudo virsh -c qemu:///system domif-setlink remnux 52:54:00:1a:b0:13 up
+#   …in-guest: `remnux upgrade`…
+sudo virsh -c qemu:///system domif-setlink remnux 52:54:00:1a:b0:13 down
+sudo virsh -c qemu:///system snapshot-create-as remnux clean-base "updated, lan down"
+```
+
+**Snapshot discipline:** snapshot a clean state and revert after each run:
+```sh
+sudo virsh -c qemu:///system snapshot-create-as <vm> clean "pristine"
+sudo virsh -c qemu:///system snapshot-revert     <vm> clean    # after analysis
+```
+
+**Verify the isolation actually holds** — from the REMnux console with the LAN NIC
+down: `ping -c1 192.168.1.1`, `… 192.168.1.222`, `… 8.8.8.8` must ALL fail; raising
+the LAN NIC makes only the last two work. (Guacamole console access is unaffected —
+it's VNC on the host's loopback, independent of guest NICs.)
 
 ---
 
@@ -60,13 +109,18 @@ From the **OVA** (VirtualBox "Virtual" / Security edition) at
    (then `sudo` to move it into place if you converted elsewhere).
 3. Define + start. *(Alt: install from the Parrot ISO — interactive, slower.)*
 
-## REMnux  (`remnux.xml`, MAC `…:03`)
-Official **OVA** appliance (login `remnux`/`malware`):
+## REMnux  (`remnux.xml`, MAC `…:03` mal-isolated, `…:13` lan-br0)
+Official **OVA** appliance (login `remnux`/`malware`). **Define `mal-isolated`
+first** (see "Network isolation & safe detonation" above) — `remnux.xml` is
+dual-homed and references it.
 1. Download from <https://docs.remnux.org/install-distro/get-virtual-appliance>.
 2. `tar -xf remnux-*.ova` → `.ovf` + `.vmdk`.
 3. `qemu-img convert -O qcow2 remnux-*-disk*.vmdk /var/lib/libvirt/images/remnux.qcow2`
 4. Define + start. If virtio disk fails to boot, edit the XML disk to
    `bus='sata' dev='sda'` (the OVA was authored for a SATA controller).
+5. In-guest, set NIC1 (`mal-isolated`) static `10.13.37.10/24`. The LAN NIC is
+   down by default — raise it only to run `remnux upgrade` (see isolation section),
+   then snapshot a `clean-base`.
 
 ## FlareVM  (`flarevm.xml`, MAC `…:04`) — manual Windows build
 No downloadable image exists; you build it on your own Windows install.

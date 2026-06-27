@@ -1,5 +1,5 @@
 <!--
-  hosts/playground/lan-br0.xml — libvirt network that plugs guest taps directly
+  hosts/lan/playground/lan-br0.xml — libvirt network that plugs guest taps directly
   into the host bridge br0 (defined declaratively in ./bridge.nix). No NAT, no
   DHCP, no firewall: guests become first-class LAN hosts and pull their reserved
   DHCP leases from the LAN router by their original MACs; the host (Guacamole)
@@ -8,13 +8,13 @@
   This is IMPERATIVE libvirt state (not managed by NixOS), kept here as the
   source of truth. Define once, as the `playground` user (in the libvirtd group):
 
-    virsh -c qemu:///system net-define  hosts/playground/lan-br0.xml
+    virsh -c qemu:///system net-define  hosts/lan/playground/lan-br0.xml
     virsh -c qemu:///system net-autostart lan-br0
     virsh -c qemu:///system net-start   lan-br0
 
   Per-guest NIC then references it:
     <interface type='network'>
-      <mac address='52:54:00:..:..:..'/>   <!-- the guest's ORIGINAL reserved MAC -->
+      <mac address='52:54:00:..:..:..'/>   (the guest's ORIGINAL reserved MAC)
       <source network='lan-br0'/>
       <model type='virtio'/>
     </interface>
