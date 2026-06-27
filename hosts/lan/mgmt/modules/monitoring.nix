@@ -1,7 +1,7 @@
 # Metrics + uptime + landing page: Prometheus scrapes node_exporter,
 # Grafana visualizes, Uptime Kuma probes the services, Homepage links it
 # all together at https://mgmt.lan.
-{ lib, ... }:
+{ config, lib, pkgs, ... }:
 
 let
   # Scrape targets come from the same host map flake.nix uses for Colmena
@@ -10,6 +10,33 @@ let
   # exporter binds 127.0.0.1, so it's scraped over localhost, not by IP.
   fleetHosts = import ../../../../fleet-hosts.nix;
   scrapedHosts = lib.filterAttrs (_: h: h.scrape) fleetHosts;
+
+  # Cert-expiry probe targets = every internal HTTPS vhost, derived straight from
+  # nginx so it can't fall behind the vhost list. These names resolve on mgmt
+  # itself (step-ca.nix pins *.mgmt.lan -> 192.168.1.222 in /etc/hosts), so the
+  # probe stays on-box.
+  blackboxPort = 9115;
+  acmeVhosts = lib.attrNames (lib.filterAttrs (_: v: v.enableACME) config.services.nginx.virtualHosts);
+  certProbeTargets = map (h: "https://${h}") acmeVhosts;
+
+  # blackbox prober that just completes a TLS handshake so probe_ssl_* is
+  # populated. insecure_skip_verify: we only read the cert's *expiry* here (to
+  # catch a silently-failed step-ca/lego renewal before the 90-day cert lapses) -
+  # chain trust is a separate concern, validated on the clients that import the
+  # root (modules/internal-ca.nix). Skipping verify also means we still read the
+  # expiry even after a renewal has already fallen back to the untrusted minica.
+  blackboxConfig = (pkgs.formats.yaml { }).generate "blackbox.yml" {
+    modules.http_2xx_tls = {
+      prober = "http";
+      timeout = "5s";
+      http = {
+        method = "GET";
+        fail_if_not_ssl = true;
+        tls_config.insecure_skip_verify = true;
+        preferred_ip_protocol = "ip4";
+      };
+    };
+  };
 in
 {
   services.prometheus = {
@@ -21,6 +48,15 @@ in
       listenAddress = "127.0.0.1";
       port = 9100;
       enabledCollectors = [ "systemd" ];
+    };
+
+    # Blackbox prober for the cert-expiry check below. localhost-bound; Prometheus
+    # reaches it over loopback and points it at each vhost via relabeling.
+    exporters.blackbox = {
+      enable = true;
+      listenAddress = "127.0.0.1";
+      port = blackboxPort;
+      configFile = blackboxConfig;
     };
     # One "node" job covering the whole fleet. instance = hostname (not ip:port)
     # keeps labels low-cardinality and makes alerts read "node media down". mgmt
@@ -40,6 +76,31 @@ in
           targets = [ "${h.ip}:9100" ];
           labels.instance = name;
         }) scrapedHosts;
+      }
+
+      # TLS cert expiry: have blackbox probe each internal HTTPS vhost. The
+      # relabel dance is the standard blackbox pattern - the real URL rides as
+      # __param_target and becomes the instance label, while __address__ is
+      # rewritten to the blackbox exporter that does the probing.
+      {
+        job_name = "blackbox-tls";
+        metrics_path = "/probe";
+        params.module = [ "http_2xx_tls" ];
+        static_configs = [ { targets = certProbeTargets; } ];
+        relabel_configs = [
+          {
+            source_labels = [ "__address__" ];
+            target_label = "__param_target";
+          }
+          {
+            source_labels = [ "__param_target" ];
+            target_label = "instance";
+          }
+          {
+            target_label = "__address__";
+            replacement = "127.0.0.1:${toString blackboxPort}";
+          }
+        ];
       }
     ];
 
@@ -118,6 +179,23 @@ in
                 annotations:
                   summary: "systemd unit failed on {{ $labels.instance }}"
                   description: "{{ $labels.name }} is in failed state on {{ $labels.instance }}."
+
+          - name: tls-certs
+            rules:
+              # Catch a silently-failed step-ca/lego renewal long before the
+              # 90-day cert actually lapses. The time-difference is the first
+              # operand so $value is the seconds remaining; the `> 0` guard means
+              # a failed probe (expiry absent/0) can't masquerade as "expiring".
+              - alert: CertExpiringSoon
+                expr: |
+                  (probe_ssl_earliest_cert_expiry - time()) < (14 * 24 * 3600)
+                  and probe_ssl_earliest_cert_expiry > 0
+                for: 1h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "TLS cert for {{ $labels.instance }} expires in under 14 days"
+                  description: "{{ $labels.instance }} expires in {{ $value | humanizeDuration }} - step-ca/lego renewal may have failed."
       ''
     ];
   };
