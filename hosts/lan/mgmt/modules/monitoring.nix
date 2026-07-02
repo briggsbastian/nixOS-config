@@ -195,6 +195,15 @@
             }; }
         ];
       }
+      {
+        "Games" = [
+          # Not a web service - tile documents the connect address (hacktop).
+          { "AllTheMons" = {
+              href = "https://modrinth.com/datapack/allthemons";
+              description = "Cobblemon server - connect to 192.168.1.26:25565";
+            }; }
+        ];
+      }
     ];
   };
 }
