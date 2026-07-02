@@ -5,11 +5,6 @@
     nix-flatpak = { url = "github:gmodena/nix-flatpak"; };
     nixvim = { url = "github:nix-community/nixvim"; };
     claude-code = {url = "github:sadjow/claude-code-nix"; };
-    # Claude Desktop GUI client (community repackage; no official Linux build).
-    # Only the gaming host uses it; servers never reference it.
-    # follows nixpkgs-stable (25.11), not unstable: needs nodePackages.asar,
-    # which unstable dropped 2026-03-03. stable still has it and we already fetch
-    # that tree for the servers, so no extra nixpkgs in the lock.
     claude-desktop = { url = "github:k3d3/claude-desktop-linux-flake"; inputs.nixpkgs.follows = "nixpkgs-stable"; };
     colmena = { url = "github:zhaofengli/colmena"; inputs.nixpkgs.follows = "nixpkgs"; };
     sops-nix = { url = "github:Mic92/sops-nix"; inputs.nixpkgs.follows = "nixpkgs"; };

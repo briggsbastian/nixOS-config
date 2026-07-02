@@ -19,11 +19,14 @@
     #tools
     obs-studio
     obsidian
+    # python3 + psutil/pywinctl/typing-extensions: PTY backend for the Obsidian "Terminal" plugin
+    (python3.withPackages (ps: with ps; [ psutil pywinctl typing-extensions ]))
     tidal-hifi
     proton-pass
     proton-vpn
     eddie
     vlc
+    spotify
     blender
     gimp
     godot
