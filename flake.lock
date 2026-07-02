@@ -192,6 +192,27 @@
         "type": "github"
       }
     },
+    "newspaper": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-stable"
+        ]
+      },
+      "locked": {
+        "lastModified": 1782755744,
+        "narHash": "sha256-aUL10RANe5v0BVawgt3/TkGkYAWE/g5F0+EkLpEts1Y=",
+        "ref": "main",
+        "rev": "fb5b22414528aee728b7332b8cde52e48fb537da",
+        "revCount": 2,
+        "type": "git",
+        "url": "ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git"
+      }
+    },
     "nix-flatpak": {
       "locked": {
         "lastModified": 1780908363,
@@ -335,6 +356,7 @@
         "colmena": "colmena",
         "disko": "disko",
         "home-manager": "home-manager",
+        "newspaper": "newspaper",
         "nix-flatpak": "nix-flatpak",
         "nixpkgs": "nixpkgs_2",
         "nixpkgs-mgmt": "nixpkgs-mgmt",

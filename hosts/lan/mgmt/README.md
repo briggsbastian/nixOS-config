@@ -2,7 +2,8 @@
 
 The LAN's management box: AdGuard, nginx, step-ca, Prometheus/Grafana,
 Loki/Alloy logs with Alertmanager + ntfy, Uptime Kuma, NetBox, Forgejo, ntopng,
-Snipe-IT, a Harmonia cache, PXE boot, and the Homepage landing page.
+Snipe-IT, a Harmonia cache, PXE boot, the morning newspaper, and the Homepage
+landing page.
 
 Web UIs all listen on localhost and are fronted by nginx under `*.mgmt.lan`, which
 AdGuard resolves to this host. Certs come from step-ca over ACME and renew on their
@@ -24,6 +25,7 @@ own; devices just need to trust the root once.
 | Snipe-IT | https://assets.mgmt.lan | setup wizard |
 | step-ca root | https://ca.mgmt.lan/root.crt | - |
 | Nix cache | https://cache.mgmt.lan (pubkey at /pubkey) | - |
+| Newspaper | https://news.mgmt.lan | none (LAN-only) |
 
 ## First-time setup
 
@@ -44,7 +46,7 @@ start.
 
 - Everything is a native service: `systemctl status adguardhome nginx step-ca
   netbox forgejo ntopng harmonia pixiecore grafana prometheus uptime-kuma loki
-  alloy alertmanager ntfy-sh`.
+  alloy alertmanager ntfy-sh morning-newspaper`.
 - Runtime secrets (NetBox/Snipe-IT keys, cache signing key) are generated on first
   boot into `/var/lib/mgmt-secrets/`; public material (root cert, cache pubkey) in
   `/var/lib/mgmt-public/`.

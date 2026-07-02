@@ -16,6 +16,7 @@
     ./modules/netboot.nix
     ./modules/snipe-it.nix
     ./modules/backup.nix
+    ./modules/newspaper.nix
   ];
 
   boot.loader.grub.enable = true;

@@ -34,6 +34,7 @@ in
       "grafana.mgmt.lan" = proxy "http://127.0.0.1:3002" { };
       "ntop.mgmt.lan" = proxy "http://127.0.0.1:3003" { };
       "git.mgmt.lan" = proxy "http://127.0.0.1:3004" { };
+      "news.mgmt.lan" = proxy "http://127.0.0.1:8377" { };
       "cache.mgmt.lan" = proxy "http://127.0.0.1:5000" {
         # binary cache pubkey for client configs
         locations."= /pubkey".alias = "/var/lib/mgmt-public/harmonia.pub";

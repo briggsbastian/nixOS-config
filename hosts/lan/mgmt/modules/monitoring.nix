@@ -176,6 +176,11 @@
               href = "http://192.168.1.189:5000";
               description = "Books, comics & manga";
             }; }
+          # unlike the rest of this group, runs on mgmt itself (newspaper.nix)
+          { "Newspaper" = {
+              href = "https://news.mgmt.lan";
+              description = "Morning e-ink RSS edition";
+            }; }
         ];
       }
       {

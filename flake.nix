@@ -18,6 +18,13 @@
     # cutover is a no-op (no package churn -> no DNS/PKI/SIEM restarts). bump
     # this deliberately, later.
     nixpkgs-mgmt.url = "github:NixOS/nixpkgs/755f5aa91337890c432639c60b6064bb7fe67769";
+    # The morning newspaper app, fetched from Forgejo over SSH. follows
+    # nixpkgs-stable so it adds no extra nixpkgs to the lock; the app builds
+    # against stable (25.11), independent of mgmt's deliberately-stale pin.
+    newspaper = {
+      url = "git+ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git?ref=main";
+      inputs.nixpkgs.follows = "nixpkgs-stable";
+    };
   };
 
   outputs = inputs @ {self, home-manager, nix-flatpak, nixvim, nixpkgs, nixpkgs-stable, nixpkgs-mgmt, claude-code, colmena, sops-nix, ...}:
@@ -93,6 +100,7 @@
       ];
       mkMgmtSystem = nixpkgs-mgmt.lib.nixosSystem {
         system = "x86_64-linux";
+        specialArgs = { inherit inputs; };   # mirror the Colmena node + mkServerSystem so modules can reach inputs.newspaper
         modules = mgmtModules;
       };
       mkMgmtColmenaNode = { ... }: {
@@ -120,6 +128,7 @@
             nixpkgs = import nixpkgs-stable { system = "x86_64-linux"; };
             # mgmt builds against its own pinned nixpkgs -> churn-free cutover.
             nodeNixpkgs.mgmt = import nixpkgs-mgmt { system = "x86_64-linux"; };
+            specialArgs = { inherit inputs; };   # mirror mkServerSystem so host modules can reach other inputs under Colmena too
           };
           mgmt = mkMgmtColmenaNode;
         }
