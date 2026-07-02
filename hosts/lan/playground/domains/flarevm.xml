@@ -40,14 +40,25 @@
       <readonly/>
     </disk>
     -->
-    <!-- VICTIM NIC: mal-isolated ONLY (see ../mal-isolated.xml) so a detonated
-         sample can never reach the LAN/internet. Static-address it in-guest on
-         10.13.37.20/24 with REMnux (10.13.37.10) as gateway+DNS (INetSim). Do NOT
-         attach a lan-br0 NIC to this box. -->
+    <!-- NIC1: PRIMARY — mal-isolated (see ../mal-isolated.xml). For DETONATION this
+         is the only live NIC: static 10.13.37.20/24 in-guest, gateway+DNS = REMnux
+         10.13.37.10 (INetSim). e1000e because Windows has no virtio driver out of
+         the box (swap to virtio + virtio-win later for speed). -->
     <interface type='network'>
       <source network='mal-isolated'/>
       <mac address='52:54:00:1a:b0:04'/>
-      <model type='e1000e'/>  <!-- Windows has an e1000e driver out of the box; swap to virtio + virtio-win later -->
+      <model type='e1000e'/>
+    </interface>
+    <!-- NIC2: LAN/internet for the BUILD ONLY (Windows install + the FLARE-VM tooling
+         download, ~tens of GB / ~1 hr), <link state='down'/> by default. Raise it
+         only for the build:  virsh domif-setlink flarevm 52:54:00:1a:b0:14 up
+         …then `… down` and snapshot. NEVER up while a live sample is present.
+         (Installing Windows with this down forces a local account — good for a lab.) -->
+    <interface type='network'>
+      <source network='lan-br0'/>
+      <mac address='52:54:00:1a:b0:14'/>
+      <model type='e1000e'/>
+      <link state='down'/>
     </interface>
     <tpm model='tpm-crb'>
       <backend type='emulator' version='2.0'/>
