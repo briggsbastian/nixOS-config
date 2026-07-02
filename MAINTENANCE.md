@@ -15,7 +15,7 @@ a server, the next deploy reverts it. The only on-box state is under [Backups](#
 | media (.189) | Jellyfin + *arr + Kavita | `--on media` | Needs the NAS NFS mount (192.168.1.213). |
 | playground (.217) | libvirt lab + Guacamole | `--on playground` | Single NIC on a `br0` bridge; network changes need care. |
 | hacktop (.26) | staging / CI | `--on hacktop` | Wi-Fi only. A deploy that restarts NetworkManager can drop it. |
-| gaming | desktop + control node | `rebuild-kde` | Not a Colmena target; rebuilds itself. |
+| desktop | desktop + control node | `rebuild-kde` | Not a Colmena target; rebuilds itself. |
 
 `@server` is all four servers, `@gated` is mgmt.
 

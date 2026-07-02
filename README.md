@@ -10,7 +10,7 @@ servers stay on stable (nixos-25.11).
 
 | Host | Role |
 |------|------|
-| gaming | KDE desktop, and the box I deploy from. |
+| desktop | KDE desktop, and the box I deploy from. |
 | mgmt | The LAN's core: AdGuard DNS, an nginx + step-ca reverse proxy, Prometheus/Grafana, a Loki + Alloy log stack with Alertmanager/ntfy alerts, NetBox, Forgejo, a Harmonia cache, and PXE boot. It runs DNS and PKI for the house, so I deploy it carefully. [Details](hosts/lan/mgmt/README.md). |
 | media | Jellyfin, the *arr stack, and Kavita, served off the NAS over NFS. |
 | playground | A libvirt security lab with a Guacamole gateway. |
