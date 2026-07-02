@@ -57,6 +57,14 @@ in
         # the root cert devices need to trust
         locations."= /root.crt".alias = "/var/lib/mgmt-public/root_ca.crt";
       };
+      # Cockpit runs on the playground host (192.168.1.217:9090), NOT localhost -
+      # the fleet's first cross-host proxy. Backend is Cockpit's own self-signed TLS
+      # (proxy_ssl_verify off, same as ca.mgmt.lan). Fronting it with a trusted
+      # step-ca cert here fixes Firefox's self-signed-cert WebSocket bounce that
+      # broke the direct https://192.168.1.217:9090 login (auth ok, ws dropped).
+      "cockpit.mgmt.lan" = proxy "https://192.168.1.217:9090" {
+        locations."/".extraConfig = "proxy_ssl_verify off;";
+      };
     };
   };
 }

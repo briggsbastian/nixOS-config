@@ -76,6 +76,7 @@
       # current versions, so zero version churn. The desktop stays on unstable.
       mkServerSystem = name: meta: nixpkgs-stable.lib.nixosSystem {
         system = "x86_64-linux";
+        specialArgs = { inherit inputs; };   # lets a host module reach another input (e.g. playground pulls cockpit-machines from unstable)
         modules = serverModules name meta;
       };
 

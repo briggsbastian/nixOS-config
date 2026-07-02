@@ -189,6 +189,10 @@
               href = "http://192.168.1.217:8080/guacamole/";
               description = "Browser remote-desktop gateway (RDP/VNC/SSH)";
             }; }
+          { "Cockpit" = {
+              href = "https://cockpit.mgmt.lan";
+              description = "playground libvirt VMs - power/console + host health";
+            }; }
         ];
       }
     ];

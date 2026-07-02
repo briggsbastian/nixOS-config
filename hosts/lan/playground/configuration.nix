@@ -19,6 +19,7 @@
     ./libvirt.nix
     ./bridge.nix
     ./guacamole.nix
+    ./cockpit.nix
   ];
 
   boot.loader.systemd-boot.enable = true;

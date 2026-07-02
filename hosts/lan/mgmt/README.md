@@ -3,7 +3,8 @@
 The LAN's management box: AdGuard, nginx, step-ca, Prometheus/Grafana,
 Loki/Alloy logs with Alertmanager + ntfy, Uptime Kuma, NetBox, Forgejo, ntopng,
 Snipe-IT, a Harmonia cache, PXE boot, the morning newspaper, and the Homepage
-landing page.
+landing page. nginx also fronts one off-box service: Cockpit on playground
+(cockpit.mgmt.lan → 192.168.1.217:9090).
 
 Web UIs all listen on localhost and are fronted by nginx under `*.mgmt.lan`, which
 AdGuard resolves to this host. Certs come from step-ca over ACME and renew on their
@@ -26,6 +27,7 @@ own; devices just need to trust the root once.
 | step-ca root | https://ca.mgmt.lan/root.crt | - |
 | Nix cache | https://cache.mgmt.lan (pubkey at /pubkey) | - |
 | Newspaper | https://news.mgmt.lan | none (LAN-only) |
+| Cockpit (playground) | https://cockpit.mgmt.lan | `playground` / sops `playground_hashed_password` |
 
 ## First-time setup
 
