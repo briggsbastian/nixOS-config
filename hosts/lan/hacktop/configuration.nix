@@ -19,19 +19,76 @@
 
   networking.hostName = "hacktop";
 
-  # Wi-Fi-only again (wlp0s20f3 = 192.168.1.26); Colmena targets .26.
+  # WIRED PRIMARY as of 2026-07-02: lan0 (USB-C dongle, UniFi fixed-IP .26)
+  # carries everything; Colmena targets .26. Wi-Fi (wlp0s20f3, fixed-IP .241)
+  # stays connected as an autoconnect fallback - safe next to the wired NIC
+  # thanks to the ARP sysctls + loose rp_filter below.
   #
-  # The USB Ethernet dongle (enp0s13f0u1 = .198) was unplugged 2026-06-15: its
-  # UniFi switch port wasn't forwarding (link up, TX only, no ARP reply from the
-  # gateway), so it black-holed the default route, and being a 2nd NIC on the same
-  # /24 as Wi-Fi it caused ARP flux that poisoned .26 and knocked the box offline.
-  # Pulling it restored clean Wi-Fi WAN.
-  # TODO (wired primary): fix/swap that switch port + cable, confirm the dongle
-  # pings the gateway and the internet, add a UniFi DHCP reservation (dongle MAC ->
-  # .198), then either go wired-only (Wi-Fi autoconnect off) or set
-  # arp_ignore=1/arp_announce=2 so the two same-subnet NICs don't flux. Until then
-  # don't make Ethernet primary.
+  # Hard-won history (2026-06-15 + 2026-07-02): the original switch port
+  # would not forward unicast to the dongle's MAC (broadcast passed, so DHCP
+  # worked while everything else died) - moving one port over fixed it. On
+  # top of that, NM's auto-generated fallback profile (DHCP, metric 100)
+  # twice hijacked same-subnet replies into the dead port and took the box
+  # off the network; no-auto-default + the pinned profile below prevent that
+  # class of failure. Diagnosis notes in Homelab/log.md.
   networking.networkmanager.enable = true;
+
+  # ARP hygiene for two NICs on the same /24 (Wi-Fi + USB-C Ethernet during
+  # the wired cutover): only answer ARP on the interface that owns the
+  # address, and announce with the outgoing interface's address. Without
+  # these, the 2026-06-15 dongle attempt caused ARP flux that poisoned .26
+  # and knocked the box offline. Kept permanently - they make Wi-Fi a safe
+  # emergency fallback next to the wired NIC.
+  boot.kernel.sysctl = {
+    "net.ipv4.conf.all.arp_ignore" = 1;
+    "net.ipv4.conf.all.arp_announce" = 2;
+  };
+
+  # Two NICs on one /24 make routing asymmetric by design (traffic for the
+  # deprioritized NIC arrives on it but reverse-routes to the other). The
+  # default strict reverse-path check drops those flows entirely - IP on the
+  # secondary NIC goes dark while its ARP still answers. Loose = still
+  # anti-spoof (source must be reachable via SOME interface), multihome-safe.
+  networking.firewall.checkReversePath = "loose";
+
+  # Cap the adapter at 1G for now - it negotiates 2.5GBASE-T, but the wired
+  # path was only ever validated at 1G (the 2.5G unicast failures during
+  # bring-up were on the bad port, so 2.5G on this port is untested). To try
+  # 2.5G: drop Advertise, replug, re-run the ping matrix.
+  # Match the adapter by MAC and name it lan0 - stable across USB ports (the
+  # default path-based name enp0s13f0u1 changes with the port, and a custom
+  # .link file drops the default NamePolicy anyway, which silently renamed the
+  # NIC to eth0 on first deploy of the speed cap).
+  systemd.network.links."10-usb-dongle-1g" = {
+    matchConfig.PermanentMACAddress = "6c:1f:f7:c7:02:84";
+    linkConfig = {
+      Name = "lan0";
+      Advertise = [ "1000baset-full" ];
+    };
+  };
+
+  # Never let NM invent a fallback "Wired connection 1" (DHCP, metric 100) for
+  # an unclaimed NIC - that's what silently hijacked all same-subnet replies
+  # into the broken wired path after a USB re-enumeration (2026-07-02, twice).
+  networking.networkmanager.settings.main.no-auto-default = "*";
+
+  networking.networkmanager.ensureProfiles.profiles.wired-primary = {
+    connection = {
+      id = "wired-primary";
+      type = "ethernet";
+      # exact name, not a match glob - a glob profile failed to re-bind on
+      # USB re-enumeration and NM fell back to its auto profile. lan0 is
+      # pinned to the adapter's MAC by the .link file above.
+      interface-name = "lan0";
+      autoconnect = true;
+      autoconnect-priority = 999;
+    };
+    # DHCP: UniFi serves the .26 fixed-IP for the adapter's MAC. Ethernet's
+    # default metric (100) beats Wi-Fi's (600), so lan0 owns the default
+    # route whenever it's up.
+    ipv4.method = "auto";
+    ipv6.method = "auto";
+  };
 
   nixpkgs.config.allowUnfree = true;
 
