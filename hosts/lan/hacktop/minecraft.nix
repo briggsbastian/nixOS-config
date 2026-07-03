@@ -102,8 +102,15 @@ in
         # Open to anyone: no whitelist by choice. Note the server is publicly
         # reachable via the cloud1 proxy, and its masquerade makes every
         # player 10.100.0.1 to us, so IP bans are meaningless - username
-        # bans (/ban) are the only lever if someone misbehaves.
+        # bans (/ban) are the only lever if someone misbehaves. Compensating
+        # controls: Mojang auth pinned below, per-IP rate limit on cloud1,
+        # daily world backups (minecraft-backup.nix), hardened unit.
         white-list = false;
+        # Vanilla defaults to true, but only implicitly (the key was absent).
+        # Pin it so no pack update or module change can ever silently turn
+        # Mojang auth off - on an open public server that would mean anyone
+        # could join as any username.
+        online-mode = true;
         allow-flight = true;
         max-tick-time = 180000;
         simulation-distance = 5;
@@ -125,5 +132,17 @@ in
         kubejs = "${serverPack}/kubejs";
       };
     };
+  };
+
+  # nix-minecraft's unit is already well sandboxed (CapabilityBoundingSet="",
+  # PrivateUsers, ProtectHome, ...) but misses these two. Same rationale as
+  # modules/media-hardening.nix: the JVM JIT needs W+X so MemoryDenyWriteExecute
+  # stays off, and /srv must stay writable so "full" rather than "strict".
+  # This closes the escalation path from a compromised modpack (373 mods +
+  # KubeJS all execute arbitrary code as the minecraft user) toward the
+  # root-owned CI runner token and WireGuard key on this box.
+  systemd.services.minecraft-server-atmons.serviceConfig = {
+    NoNewPrivileges = true;
+    ProtectSystem = "full";
   };
 }
