@@ -33,6 +33,11 @@ let
   # root (modules/internal-ca.nix). Skipping verify also means we still read the
   # expiry even after a renewal has already fallen back to the untrusted minica.
   blackboxConfig = (pkgs.formats.yaml { }).generate "blackbox.yml" {
+    # Plain TCP connect - used for the public Minecraft path probe.
+    modules.tcp_connect = {
+      prober = "tcp";
+      timeout = "5s";
+    };
     modules.http_tls = {
       prober = "http";
       timeout = "5s";
@@ -43,7 +48,20 @@ let
         # prove the vhost answers over TLS), not to health-check the app.
         # step-ca serves 404 at /, which is fine - requiring 2xx made
         # ca.mgmt.lan a permanent TlsProbeDown false positive.
-        valid_status_codes = [ 200 301 302 303 304 307 308 400 401 403 404 405 ];
+        valid_status_codes = [
+          200
+          301
+          302
+          303
+          304
+          307
+          308
+          400
+          401
+          403
+          404
+          405
+        ];
         tls_config.insecure_skip_verify = true;
         preferred_ip_protocol = "ip4";
       };
@@ -99,6 +117,33 @@ in
         metrics_path = "/probe";
         params.module = [ "http_tls" ];
         static_configs = [ { targets = certProbeTargets; } ];
+        relabel_configs = [
+          {
+            source_labels = [ "__address__" ];
+            target_label = "__param_target";
+          }
+          {
+            source_labels = [ "__param_target" ];
+            target_label = "instance";
+          }
+          {
+            target_label = "__address__";
+            replacement = "127.0.0.1:${toString blackboxPort}";
+          }
+        ];
+      }
+
+      # The public Minecraft front door, probed end to end: this TCP connect
+      # traverses Linode's firewall, cloud1's DNAT, the WireGuard tunnel, and
+      # the server on hacktop - if any link breaks, MinecraftPathDown fires.
+      # Name+port match the _minecraft._tcp SRV record players use (Prometheus
+      # doesn't resolve SRV, so the port is repeated here - keep in sync with
+      # cloud1's proxy.nix).
+      {
+        job_name = "blackbox-minecraft";
+        metrics_path = "/probe";
+        params.module = [ "tcp_connect" ];
+        static_configs = [ { targets = [ "play.briggsbastian.com:24799" ]; } ];
         relabel_configs = [
           {
             source_labels = [ "__address__" ];
@@ -221,6 +266,18 @@ in
                 annotations:
                   summary: "TLS probe failing for {{ $labels.instance }}"
                   description: "Blackbox could not complete a TLS handshake with {{ $labels.instance }} for 15m (endpoint down, or nginx could not load its cert)."
+
+              # The public Minecraft path (Linode firewall -> cloud1 DNAT ->
+              # WireGuard -> hacktop). 10m absorbs a modpack restart (the
+              # NeoForge boot takes minutes and the port is closed meanwhile).
+              - alert: MinecraftPathDown
+                expr: probe_success{job="blackbox-minecraft"} == 0
+                for: 10m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Public Minecraft path down ({{ $labels.instance }})"
+                  description: "TCP connect to {{ $labels.instance }} has failed for 10m - a link in Linode FW -> cloud1 DNAT -> tunnel -> hacktop server is broken."
       ''
     ];
   };
