@@ -76,7 +76,7 @@
         hacktop    = { zone = "lan";   targetHost = "192.168.1.26";   tags = [ "server" "lan" "staging" ]; };
         media      = { zone = "lan";   targetHost = "192.168.1.189";  tags = [ "server" "lan" "media" ]; };
         playground = { zone = "lan";   targetHost = "192.168.1.217";  tags = [ "server" "lan" "lab" ]; };
-        cloud1     = { zone = "cloud"; targetHost = "172.232.161.44"; tags = [ "server" "cloud" ]; };
+        cloud1     = { zone = "cloud"; targetHost = "172.234.232.185"; tags = [ "server" "cloud" ]; };
       };
 
       # Servers build against stable nixpkgs (nixos-25.11), matching the boxes'
