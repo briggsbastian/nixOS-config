@@ -29,6 +29,13 @@ _: {
       update-kde = "/etc/nixos/hosts/workstation/desktop/scripts/upgrade.sh kde";
 
       ls = "lsd";
+
+      # playground (security lab host): quick shell + HTB VPN control from the
+      # desktop. `htb up|down|status|ip` runs the on-host wrapper over SSH, so the
+      # same word works here as it does on the box (see the playground decepticon
+      # module). `-t` gives a tty for clean status output.
+      pg = "ssh playground@192.168.1.217";
+      htb = "ssh -t playground@192.168.1.217 htb";
     };
 
     history = {

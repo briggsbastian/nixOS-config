@@ -57,11 +57,53 @@
   # git/curl are already in common.nix; gnumake drives upstream's `make dogfood`,
   # docker-compose is the v2 CLI Decepticon shells out to, and python3 + pipx
   # cover `pipx install decepticon` if you prefer the published CLI over source.
+  #
+  # `htb` is a tiny convenience wrapper for the VPN toggle below - `htb up|down`
+  # (no password prompt, see the scoped sudo rule further down), plus `htb status`
+  # / `htb ip` to see the tunnel state. It's on every shell's PATH here, and the
+  # desktop aliases it over SSH (hosts/workstation/desktop/dotfiles/zsh.nix), so
+  # the same word works from the box, over SSH, or in Cockpit's terminal.
   environment.systemPackages = with pkgs; [
     gnumake
     docker-compose
     python3
     pipx
+    (writeShellApplication {
+      name = "htb";
+      runtimeInputs = [
+        iproute2
+        gawk
+      ];
+      text = ''
+        sudo=/run/wrappers/bin/sudo
+        sc=/run/current-system/sw/bin/systemctl
+        unit=openvpn-htb.service
+        case "''${1:-status}" in
+          up)
+            if "$sudo" "$sc" start "$unit"; then
+              echo "HTB VPN: up. See 'htb status' / 'htb ip'."
+            else
+              echo "HTB VPN: start failed - is a real .ovpn set in the htb_ovpn secret? ('htb status' for details)"
+            fi ;;
+          down)    "$sudo" "$sc" stop "$unit";    echo "HTB VPN: stopped." ;;
+          restart) "$sudo" "$sc" restart "$unit"; echo "HTB VPN: restarted." ;;
+          status)
+            "$sc" --no-pager --lines=0 status "$unit" || true
+            if ip -4 -brief addr show tun0 >/dev/null 2>&1; then
+              echo "tun0: $(ip -4 -brief addr show tun0 | awk '{print $3}')"
+            else
+              echo "tun0: down (no HTB tunnel)"
+            fi ;;
+          ip)
+            if ip -4 -brief addr show tun0 >/dev/null 2>&1; then
+              ip -4 -brief addr show tun0 | awk '{print $3}'
+            else
+              echo "tun0 down"
+            fi ;;
+          *) echo "usage: htb {up|down|restart|status|ip}"; exit 1 ;;
+        esac
+      '';
+    })
   ];
 
   # --- HackTheBox (and other lab-VPN) connectivity -------------------------
@@ -93,4 +135,27 @@
   # Trust the VPN interface so the deny-by-default nftables firewall (common.nix)
   # doesn't drop replies from HTB targets or the container->tun0 forward path.
   networking.firewall.trustedInterfaces = [ "tun0" ];
+
+  # Scoped NOPASSWD sudo so `htb up/down/restart` (and Cockpit's Services page)
+  # toggle the VPN without a password prompt - convenience only. Same tight
+  # pattern as modules/deploy-user.nix: exact stable binary path + exact args, so
+  # this grants toggling THIS one unit and nothing else (not general systemctl).
+  # Merges with the deploy user's rules (extraRules is a list).
+  security.sudo.extraRules = [
+    {
+      users = [ "playground" ];
+      runAs = "root";
+      commands =
+        map
+          (verb: {
+            command = "/run/current-system/sw/bin/systemctl ${verb} openvpn-htb.service";
+            options = [ "NOPASSWD" ];
+          })
+          [
+            "start"
+            "stop"
+            "restart"
+          ];
+    }
+  ];
 }
