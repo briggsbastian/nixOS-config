@@ -33,12 +33,17 @@ let
   # root (modules/internal-ca.nix). Skipping verify also means we still read the
   # expiry even after a renewal has already fallen back to the untrusted minica.
   blackboxConfig = (pkgs.formats.yaml { }).generate "blackbox.yml" {
-    modules.http_2xx_tls = {
+    modules.http_tls = {
       prober = "http";
       timeout = "5s";
       http = {
         method = "GET";
         fail_if_not_ssl = true;
+        # Any status counts as alive: the probe exists to read the cert (and
+        # prove the vhost answers over TLS), not to health-check the app.
+        # step-ca serves 404 at /, which is fine - requiring 2xx made
+        # ca.mgmt.lan a permanent TlsProbeDown false positive.
+        valid_status_codes = [ 200 301 302 303 304 307 308 400 401 403 404 405 ];
         tls_config.insecure_skip_verify = true;
         preferred_ip_protocol = "ip4";
       };
@@ -92,7 +97,7 @@ in
       {
         job_name = "blackbox-tls";
         metrics_path = "/probe";
-        params.module = [ "http_2xx_tls" ];
+        params.module = [ "http_tls" ];
         static_configs = [ { targets = certProbeTargets; } ];
         relabel_configs = [
           {
