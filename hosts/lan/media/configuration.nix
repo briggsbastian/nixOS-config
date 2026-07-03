@@ -7,7 +7,12 @@
 # Firewall is safe to enable here: every *arr service sets openFirewall = true, so
 # its ports open themselves (no-ops while the stock install left the firewall off).
 # NFS to the NAS is outbound, unaffected.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   imports = [
@@ -31,7 +36,10 @@
   users.users.media = {
     isNormalUser = true;
     description = "media";
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+    ];
     packages = with pkgs; [ neovim ];
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOdyXoksJm43MuCM6ZSKowV5N3tP94bMcjcyONvb3fzL briggs@nixos"

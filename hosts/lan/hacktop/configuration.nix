@@ -4,7 +4,12 @@
 # the fleet (Project 1 -> Project 5 runner). Adopted from the stock installer image
 # (NixOS 25.11), so this converges the existing box. Baseline (SSH key-only,
 # nftables w/ 22, flakes, zsh, base tools) is in ../../../modules/common.nix.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   imports = [
@@ -101,7 +106,10 @@
     isNormalUser = true;
     description = "hacktop";
     shell = pkgs.zsh;
-    extraGroups = [ "networkmanager" "wheel" ];
+    extraGroups = [
+      "networkmanager"
+      "wheel"
+    ];
     openssh.authorizedKeys.keys = [
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOdyXoksJm43MuCM6ZSKowV5N3tP94bMcjcyONvb3fzL briggs@nixos"
     ];
@@ -111,7 +119,7 @@
   # Just enough to stage fleet configs and drive builds by hand for now; the
   # actual self-hosted runner is stood up in Project 5.
   environment.systemPackages = with pkgs; [
-    nix-output-monitor   # nom - readable build output when staging configs
+    nix-output-monitor # nom - readable build output when staging configs
     nixos-rebuild
     jq
     just

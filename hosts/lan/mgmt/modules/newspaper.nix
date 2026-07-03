@@ -13,9 +13,9 @@
     # Feeds are versioned in the repo (single source of truth). To change them:
     # edit feeds.toml, push, `nix flake update newspaper`, redeploy.
     feedsFile = inputs.newspaper + "/feeds.toml";
-    address = "127.0.0.1";   # nginx terminates TLS and proxies; don't expose directly
+    address = "127.0.0.1"; # nginx terminates TLS and proxies; don't expose directly
     port = 8377;
-    refreshTime = "05:30";   # build the morning edition before wake-up
-    openFirewall = false;    # reached only via the nginx vhost
+    refreshTime = "05:30"; # build the morning edition before wake-up
+    openFirewall = false; # reached only via the nginx vhost
   };
 }

@@ -1,7 +1,7 @@
 # PXE/netboot: pixiecore in ProxyDHCP mode serving netboot.xyz - boot any
 # LAN machine into installers/rescue images without touching the router's
 # DHCP. Network-boot a machine and pick an OS from the menu.
-{ ... }:
+_:
 
 {
   services.pixiecore = {

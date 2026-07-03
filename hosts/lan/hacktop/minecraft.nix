@@ -17,7 +17,13 @@
 # The ServerFiles zip is ~1 GB. The mediafilez URL is CurseForge's stable
 # CDN; to avoid re-downloading when the store path gets GC'd, pre-seed from
 # a local copy with: nix-store --add-fixed sha256 ServerFiles-1.0.1.zip
-{ config, pkgs, lib, inputs, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  inputs,
+  ...
+}:
 
 let
   serverFiles = pkgs.fetchurl {
@@ -58,7 +64,7 @@ in
       enable = true;
       # Pin the exact loader build the pack ships (see startserver.sh in the zip).
       package = pkgs.neoforgeServers.neoforge-1_21_1-21_1_234;
-      openFirewall = true;   # 25565/tcp - LAN only, hacktop is behind NAT
+      openFirewall = true; # 25565/tcp - LAN only, hacktop is behind NAT
 
       # Heap bounds match the pack's user_jvm_args.txt; the G1 flags are the
       # pack-shipped (Aikar-style) tuning. 8 GB max still leaves >20 GB for

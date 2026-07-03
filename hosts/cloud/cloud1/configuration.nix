@@ -5,7 +5,12 @@
 # baseline (key-only SSH, nftables w/ 22, deploy user, zsh, sops, step-ca root
 # trust) comes from ../../../modules/common.nix via serverModules in flake.nix;
 # this file holds only what's cloud-specific.
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   imports = [
@@ -40,6 +45,15 @@
   # unreachable substituter would stall every nix build, so opt out until then.
   # (common.nix sets this with lib.mkDefault, so this plain assignment wins.)
   alcove.internalCa.useCache = false;
+
+  # --- Off-LAN: no node_exporter until there's a private path to mgmt ---------
+  # common.nix enables a node_exporter fleet-wide (modules/metrics.nix), firewalled
+  # so only mgmt (192.168.1.222) can scrape :9100. cloud1 is a PUBLIC VPS with no
+  # private link to mgmt, so even a mgmt-scoped rule can't help here and exposing
+  # the port publicly is unsafe. Stay off until the WireGuard/Headscale mesh
+  # (Project 4C) lands, then flip this true and set cloud1.scrape = true in
+  # fleet-hosts.nix. (Default is true, so this plain assignment opts out.)
+  alcove.metrics.nodeExporter.enable = false;
 
   # --- Break-glass admin ----------------------------------------------------
   # Colmena deploys as the unprivileged `deploy` user (modules/deploy-user.nix).

@@ -4,7 +4,7 @@
 # doesn't open 3003, so it's only reachable through nginx.
 # Without switch port mirroring it sees only traffic to/from this host -
 # which includes every DNS query, since AdGuard lives here.
-{ ... }:
+_:
 
 {
   services.ntopng = {

@@ -1,0 +1,113 @@
+# .forgejo/workflows/lock-bump.yml
+#
+# Self-hosted Renovate: once a week, bump every flake input EXCEPT the pinned
+# nixpkgs-mgmt, build every host on the new lock, and open a PR for review. No
+# auto-merge -- you read the closure diff (especially the kernel) and merge by
+# hand, exactly like the manual `nix flake update` flow in MAINTENANCE.md.
+#
+# Why nixpkgs-mgmt is held: it's frozen so the first Colmena cut to mgmt is a
+# no-op (no package churn -> no DNS/PKI/SIEM restarts). Bumping it is a separate,
+# deliberate, in-a-window operation, never an automated PR.
+#
+# Auth: the per-run token Forgejo Actions injects as secrets.GITHUB_TOKEN -- no
+# new secret. The repo must let Actions write: Settings -> Actions gives the run
+# token read+write, and "Allow Forgejo Actions to create Pull Requests" is on.
+name: flake-lock-bump
+
+on:
+  schedule:
+    - cron: "0 5 * * 1" # Mondays 05:00
+  workflow_dispatch:
+
+concurrency:
+  group: flake-lock-bump
+  cancel-in-progress: true
+
+jobs:
+  update:
+    runs-on: nix
+    outputs:
+      changed: ${{ steps.bump.outputs.changed }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: nix flake update (holding the pinned mgmt input)
+        id: bump
+        run: |
+          # nixpkgs-mgmt is frozen on purpose, so it is NEVER listed here. Every
+          # other input is updated by name. Keep this list in sync with the
+          # inputs in flake.nix (minus nixpkgs-mgmt).
+          nix flake update \
+            nixpkgs nixpkgs-stable home-manager nix-flatpak nixvim \
+            claude-code claude-desktop colmena sops-nix disko treefmt-nix
+          if git diff --quiet -- flake.lock; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "flake.lock unchanged; nothing to do."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: push the bump branch
+        if: steps.bump.outputs.changed == 'true'
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          git config user.name "forgejo-actions[bot]"
+          git config user.email "actions@git.mgmt.lan"
+          git switch -C automated/flake-lock-bump
+          git commit -am "chore(flake): weekly flake.lock bump (nixpkgs-mgmt held)"
+          git -c http.extraheader="Authorization: token ${TOKEN}" \
+            push -f "${SERVER}/${REPO}.git" "HEAD:automated/flake-lock-bump"
+
+  # Reuse the same host set CI's build-hosts matrix uses: prove the bump builds
+  # on every host before any PR is opened. Keep this list in sync with ci.yml.
+  build:
+    needs: update
+    if: needs.update.outputs.changed == 'true'
+    runs-on: nix
+    strategy:
+      fail-fast: false
+      matrix:
+        host: [cloud1, hacktop, media, mgmt, nixos-kde, playground]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: automated/flake-lock-bump
+      - name: build ${{ matrix.host }}
+        run: |
+          nix build --print-build-logs --no-link \
+            ".#nixosConfigurations.${{ matrix.host }}.config.system.build.toplevel"
+
+  # Only reached if every host built (needs: build, which fails if any leg did).
+  open-pr:
+    needs: build
+    runs-on: nix
+    steps:
+      - uses: actions/checkout@v4
+      - name: open a PR (or note the existing one)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          api="${SERVER}/api/v1/repos/${REPO}/pulls"
+          body='Automated weekly `nix flake update` with **nixpkgs-mgmt held** (its pin is deliberate). Every host built green on this branch. Review the closure diff before merging -- no auto-merge.'
+          payload=$(jq -n --arg body "$body" '{
+            head: "automated/flake-lock-bump",
+            base: "main",
+            title: "chore(flake): weekly flake.lock bump",
+            body: $body
+          }')
+          code=$(curl -sS -o /tmp/pr.json -w '%{http_code}' -X POST "$api" \
+            -H "Authorization: token ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+          if [ "$code" = "201" ]; then
+            echo "PR opened."
+          elif grep -qi "already exist" /tmp/pr.json; then
+            echo "PR already open; the force-push updated it."
+          else
+            echo "PR create failed (HTTP $code):"; cat /tmp/pr.json; exit 1
+          fi

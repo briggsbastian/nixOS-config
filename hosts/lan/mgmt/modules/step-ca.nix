@@ -3,7 +3,12 @@
 # Root/intermediate are generated once into /var/lib/step-ca (DynamicUser
 # state dir, physically /var/lib/private/step-ca). The root cert is
 # published at https://ca.mgmt.lan/root.crt - install it on your devices.
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 {
   services.step-ca = {
@@ -14,7 +19,11 @@
       root = "/var/lib/step-ca/certs/root_ca.crt";
       crt = "/var/lib/step-ca/certs/intermediate_ca.crt";
       key = "/var/lib/step-ca/secrets/intermediate_ca_key";
-      dnsNames = [ "ca.mgmt.lan" "localhost" "127.0.0.1" ];
+      dnsNames = [
+        "ca.mgmt.lan"
+        "localhost"
+        "127.0.0.1"
+      ];
       logger.format = "text";
       db = {
         type = "badgerv2";
@@ -53,8 +62,7 @@
   # self-signed cert on all *.mgmt.lan. Pin every ACME domain to this box in
   # /etc/hosts (nginx listens on 0.0.0.0:80); derived from the cert set so it
   # stays in sync with the vhosts. mgmt keeps its upstream resolver otherwise.
-  networking.hosts."192.168.1.222" =
-    builtins.attrNames config.security.acme.certs;
+  networking.hosts."192.168.1.222" = builtins.attrNames config.security.acme.certs;
 
   systemd.services = {
     step-ca-init = {
@@ -89,10 +97,8 @@
     };
   }
   # every ACME order needs the CA up first
-  // lib.genAttrs
-    (map (n: "acme-${n}") (builtins.attrNames config.security.acme.certs))
-    (_: {
-      after = [ "step-ca.service" ];
-      wants = [ "step-ca.service" ];
-    });
+  // lib.genAttrs (map (n: "acme-${n}") (builtins.attrNames config.security.acme.certs)) (_: {
+    after = [ "step-ca.service" ];
+    wants = [ "step-ca.service" ];
+  });
 }

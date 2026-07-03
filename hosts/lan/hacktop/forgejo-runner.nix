@@ -18,12 +18,27 @@
       tokenFile = config.sops.secrets.forgejo_runner_token.path;
 
       # Jobs run on the host (has Nix + KVM). Select with `runs-on: native` / `nix`.
-      labels = [ "native:host" "nix:host" ];
+      labels = [
+        "native:host"
+        "nix:host"
+      ];
 
       # PATH for host jobs.
       hostPackages = with pkgs; [
-        bash coreutils git gnused gnugrep gawk gnutar gzip
-        nix nodejs cacert curl wget jq
+        bash
+        coreutils
+        git
+        gnused
+        gnugrep
+        gawk
+        gnutar
+        gzip
+        nix
+        nodejs
+        cacert
+        curl
+        wget
+        jq
       ];
 
       settings = {
@@ -35,7 +50,12 @@
   };
 
   # Let the nix daemon run NixOS VM tests on this box.
-  nix.settings.system-features = [ "nixos-test" "kvm" "big-parallel" "benchmark" ];
+  nix.settings.system-features = [
+    "nixos-test"
+    "kvm"
+    "big-parallel"
+    "benchmark"
+  ];
 
   # Pin git.mgmt.lan so it resolves without depending on DHCP DNS; TLS still
   # matches the step-ca cert (root trusted via internal-ca.nix).

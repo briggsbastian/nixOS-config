@@ -49,6 +49,12 @@ start.
 - Everything is a native service: `systemctl status adguardhome nginx step-ca
   netbox forgejo ntopng harmonia pixiecore grafana prometheus uptime-kuma loki
   alloy alertmanager ntfy-sh morning-newspaper`.
+- Metrics: Prometheus scrapes a node_exporter on every LAN server (`:9100`, open to
+  mgmt only) plus its own, with metric alerts (node down, disk/mem/swap, failed
+  units) and a blackbox cert-expiry probe (`:9115`, 14-day warning) all flowing to
+  Alertmanager -> ntfy. Scrape targets and the cert-probe list are derived (from
+  `fleet-hosts.nix` and nginx's vhosts), so neither drifts. See
+  `modules/monitoring.nix`; active alerts at `alerts.mgmt.lan`.
 - Runtime secrets (NetBox/Snipe-IT keys, cache signing key) are generated on first
   boot into `/var/lib/mgmt-secrets/`; public material (root cert, cache pubkey) in
   `/var/lib/mgmt-public/`.

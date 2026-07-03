@@ -19,12 +19,14 @@
   networking.wireguard.interfaces.wg-mc = {
     ips = [ "10.100.0.2/24" ];
     privateKeyFile = config.sops.secrets.wg_private_key.path;
-    peers = [{
-      # cloud1 (Linode us-sea)
-      publicKey = "rLBfuy8uF0mQF4OVs9piBZEUIdrs/E2dSpSNPSUjEVk=";
-      allowedIPs = [ "10.100.0.0/24" ];
-      endpoint = "172.234.232.185:51820";
-      persistentKeepalive = 25;   # hold the NAT mapping open from our side
-    }];
+    peers = [
+      {
+        # cloud1 (Linode us-sea)
+        publicKey = "rLBfuy8uF0mQF4OVs9piBZEUIdrs/E2dSpSNPSUjEVk=";
+        allowedIPs = [ "10.100.0.0/24" ];
+        endpoint = "172.234.232.185:51820";
+        persistentKeepalive = 25; # hold the NAT mapping open from our side
+      }
+    ];
   };
 }

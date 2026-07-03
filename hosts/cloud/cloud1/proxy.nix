@@ -28,11 +28,13 @@
     ips = [ "10.100.0.1/24" ];
     listenPort = 51820;
     privateKeyFile = config.sops.secrets.wg_private_key.path;
-    peers = [{
-      # hacktop - the only peer; nothing else can join the tunnel
-      publicKey = "LnThq+lGAjbnT4cdST4cueGX1dv3icEqVZf9EwKiEH8=";
-      allowedIPs = [ "10.100.0.2/32" ];
-    }];
+    peers = [
+      {
+        # hacktop - the only peer; nothing else can join the tunnel
+        publicKey = "LnThq+lGAjbnT4cdST4cueGX1dv3icEqVZf9EwKiEH8=";
+        allowedIPs = [ "10.100.0.2/32" ];
+      }
+    ];
   };
 
   # WG handshakes are silent to anyone without a valid peer key, so an open

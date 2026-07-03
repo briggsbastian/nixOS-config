@@ -7,10 +7,18 @@
 {
   # The Colmena deploy identity (deploy user + trusted-user + scoped sudo) lives
   # in its own module so mgmt can reuse just that without the rest of this file.
-  imports = [ ./deploy-user.nix ];
+  # metrics.nix adds a mgmt-only node_exporter to every fleet host (cloud1 opts
+  # out; mgmt runs its own, localhost-bound).
+  imports = [
+    ./deploy-user.nix
+    ./metrics.nix
+  ];
 
   # Flakes everywhere.
-  nix.settings.experimental-features = [ "nix-command" "flakes" ];
+  nix.settings.experimental-features = [
+    "nix-command"
+    "flakes"
+  ];
 
   # --- SSH: key-only, no root, no passwords ---------------------------------
   services.openssh = {

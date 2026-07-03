@@ -4,14 +4,24 @@
 # nixos-anywhere touches the box. Minimal on purpose: a Linode Nanode is a
 # KVM/QEMU guest, so the qemu-guest profile + virtio modules are about all the
 # "hardware" there is. No fileSystems/swapDevices here; disko.nix owns those.
-{ config, lib, modulesPath, ... }:
+{
+  config,
+  lib,
+  modulesPath,
+  ...
+}:
 
 {
   imports = [ (modulesPath + "/profiles/qemu-guest.nix") ];
 
   # Linode disks show up as /dev/sdX (virtio-scsi, not virtio-blk's /dev/vdX).
   # These are the modules initrd needs to find the root disk at boot.
-  boot.initrd.availableKernelModules = [ "virtio_pci" "virtio_scsi" "ahci" "sd_mod" ];
+  boot.initrd.availableKernelModules = [
+    "virtio_pci"
+    "virtio_scsi"
+    "ahci"
+    "sd_mod"
+  ];
   boot.initrd.kernelModules = [ ];
   boot.kernelModules = [ ];
   boot.extraModulePackages = [ ];

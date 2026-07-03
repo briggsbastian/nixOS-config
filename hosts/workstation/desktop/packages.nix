@@ -20,7 +20,13 @@
     obs-studio
     obsidian
     # python3 + psutil/pywinctl/typing-extensions: PTY backend for the Obsidian "Terminal" plugin
-    (python3.withPackages (ps: with ps; [ psutil pywinctl typing-extensions ]))
+    (python3.withPackages (
+      ps: with ps; [
+        psutil
+        pywinctl
+        typing-extensions
+      ]
+    ))
     tidal-hifi
     proton-pass
     proton-vpn
@@ -34,9 +40,21 @@
 
   services.flatpak = {
     enable = true;
-    remotes = [{ name = "flathub"; location = "https://flathub.org/repo/flathub.flatpakrepo";}];
-    packages = [ "com.github.iwalton3.jellyfin-media-player" "me.proton.Mail" "org.DolphinEmu.dolphin-emu" ];
-    update.auto = { enable = true; onCalendar = "weekly";};
+    remotes = [
+      {
+        name = "flathub";
+        location = "https://flathub.org/repo/flathub.flatpakrepo";
+      }
+    ];
+    packages = [
+      "com.github.iwalton3.jellyfin-media-player"
+      "me.proton.Mail"
+      "org.DolphinEmu.dolphin-emu"
+    ];
+    update.auto = {
+      enable = true;
+      onCalendar = "weekly";
+    };
   };
 
   programs.appimage = {
@@ -60,7 +78,9 @@
     };
   };
 
-  programs.zsh = { enable = true; };
+  programs.zsh = {
+    enable = true;
+  };
 
   programs.obs-studio = {
     enable = true;

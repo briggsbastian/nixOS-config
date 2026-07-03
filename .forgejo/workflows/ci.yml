@@ -27,6 +27,16 @@ jobs:
       - name: nix flake check
         run: nix flake check --print-build-logs --show-trace
 
+  # 1b. fmt + lint gate (nixfmt + statix + deadnix via treefmt). This is the same
+  #     check `nix flake check` runs, broken out as its own job for fast, obvious
+  #     feedback when something just needs `nix fmt`.
+  lint:
+    runs-on: nix
+    steps:
+      - uses: actions/checkout@v4
+      - name: treefmt (nixfmt + statix + deadnix)
+        run: nix build --print-build-logs .#checks.x86_64-linux.formatting
+
   # 2. Secret scan (Project 5: gitleaks on every push). sops-encrypted files are
   #    ciphertext, so they don't trip it.
   gitleaks:

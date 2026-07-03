@@ -12,9 +12,9 @@
 let
   cfg = config.alcove.internalCa;
   # Hostname out of a URL: strip scheme, take the part before the first "/".
-  hostOf = url:
-    lib.elemAt (lib.splitString "/"
-      (lib.removePrefix "http://" (lib.removePrefix "https://" url))) 0;
+  hostOf =
+    url:
+    lib.elemAt (lib.splitString "/" (lib.removePrefix "http://" (lib.removePrefix "https://" url))) 0;
 in
 {
   options.alcove.internalCa = {
@@ -72,7 +72,10 @@ in
     #     mgmt's AdGuard as their resolver, so these names wouldn't resolve and
     #     the cache would silently fall back to cache.nixos.org. nginx on mgmt
     #     fronts both on :443. (Same /etc/hosts pattern step-ca.nix uses on mgmt.)
-    networking.hosts."${cfg.mgmtIp}" = [ (hostOf cfg.acmeDirectory) (hostOf cfg.cacheUrl) ];
+    networking.hosts."${cfg.mgmtIp}" = [
+      (hostOf cfg.acmeDirectory)
+      (hostOf cfg.cacheUrl)
+    ];
 
     # 2. Add mgmt's binary cache (cfg.useCache). cache.mgmt.lan serves a real
     #    step-ca cert and the root is trusted via item 1, so nix can verify it.

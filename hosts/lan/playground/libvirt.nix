@@ -30,5 +30,9 @@
   # VM-import tooling: qemu-img (qcow2 convert), p7zip (Kali ships its prebuilt
   # QEMU image as a .7z), wget (fetch the multi-GB appliance images — REMnux/Parrot
   # OVAs). tar/xz/gzip for OVAs are already in the base system.
-  environment.systemPackages = with pkgs; [ qemu-utils p7zip wget ];
+  environment.systemPackages = with pkgs; [
+    qemu-utils
+    p7zip
+    wget
+  ];
 }

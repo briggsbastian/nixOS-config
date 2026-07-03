@@ -11,7 +11,12 @@
 # `5900 + virsh vncdisplay <vm>`); REMnux is built + connected, the rest as you build
 # them. Port 8080 is opened below so it stays reachable once the firewall is on. The
 # lab itself is tracked in "Project 1 - Nixify the Lab".
-{ config, pkgs, lib, ... }:
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 {
   imports = [

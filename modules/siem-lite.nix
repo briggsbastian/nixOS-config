@@ -4,21 +4,27 @@
 # Loki/Alloy configs are free-form text, so eval won't catch schema errors - only
 # runtime does. Grafana/Prometheus already exist on mgmt (monitoring.nix), so we
 # merge into them rather than redefine. Port 3000 is AdGuard, don't touch it.
-{ config, lib, pkgs, ... }:
+{
+  config,
+  lib,
+  pkgs,
+  ...
+}:
 
 let
   cfg = config.alcove.siemLite;
 
-  lokiPort         = 3100;
+  lokiPort = 3100;
   alertmanagerPort = 9093;
 
   alloyNeeded = cfg.server.enable || cfg.agent.enable;
 
   # server pushes to its own Loki, agents to the central one
   pushEndpoint =
-    if cfg.server.enable
-    then "http://127.0.0.1:${toString lokiPort}/loki/api/v1/push"
-    else cfg.lokiEndpoint;
+    if cfg.server.enable then
+      "http://127.0.0.1:${toString lokiPort}/loki/api/v1/push"
+    else
+      cfg.lokiEndpoint;
 
   # journal -> Loki. labels stay unit/host/level only (cardinality)
   alloyConfigText = ''
@@ -64,11 +70,9 @@ let
 in
 {
   options.alcove.siemLite = {
-    server.enable = lib.mkEnableOption
-      "the central SIEM-lite server (Loki + Alertmanager + Grafana Loki datasource + local Alloy)";
+    server.enable = lib.mkEnableOption "the central SIEM-lite server (Loki + Alertmanager + Grafana Loki datasource + local Alloy)";
 
-    agent.enable = lib.mkEnableOption
-      "the SIEM-lite log shipper (Alloy: systemd journal -> central Loki)";
+    agent.enable = lib.mkEnableOption "the SIEM-lite log shipper (Alloy: systemd journal -> central Loki)";
 
     lokiEndpoint = lib.mkOption {
       type = lib.types.str;
@@ -132,49 +136,54 @@ in
         configuration = {
           auth_enabled = false;
           server = {
-            http_listen_port    = lokiPort;
-            http_listen_address = "0.0.0.0";  # LAN agents reach it; firewalled below
+            http_listen_port = lokiPort;
+            http_listen_address = "0.0.0.0"; # LAN agents reach it; firewalled below
           };
 
           common = {
-            instance_addr      = "127.0.0.1";
-            path_prefix        = "/var/lib/loki";
+            instance_addr = "127.0.0.1";
+            path_prefix = "/var/lib/loki";
             replication_factor = 1;
             ring.kvstore.store = "inmemory";
             storage.filesystem = {
               chunks_directory = "/var/lib/loki/chunks";
-              rules_directory  = "/var/lib/loki/rules";
+              rules_directory = "/var/lib/loki/rules";
             };
           };
 
-          schema_config.configs = [{
-            from         = "2024-01-01";
-            store        = "tsdb";
-            object_store = "filesystem";
-            schema       = "v13";
-            index = { prefix = "index_"; period = "24h"; };
-          }];
+          schema_config.configs = [
+            {
+              from = "2024-01-01";
+              store = "tsdb";
+              object_store = "filesystem";
+              schema = "v13";
+              index = {
+                prefix = "index_";
+                period = "24h";
+              };
+            }
+          ];
 
           limits_config = {
-            retention_period           = "30d";
-            reject_old_samples         = true;
+            retention_period = "30d";
+            reject_old_samples = true;
             reject_old_samples_max_age = "168h";
           };
 
           compactor = {
-            working_directory    = "/var/lib/loki/compactor";
-            retention_enabled    = true;
+            working_directory = "/var/lib/loki/compactor";
+            retention_enabled = true;
             delete_request_store = "filesystem";
           };
 
           ruler = {
-            alertmanager_url       = "http://127.0.0.1:${toString alertmanagerPort}";
+            alertmanager_url = "http://127.0.0.1:${toString alertmanagerPort}";
             enable_alertmanager_v2 = true;
-            enable_api             = true;
-            rule_path              = "/var/lib/loki/ruler-wal";
+            enable_api = true;
+            rule_path = "/var/lib/loki/ruler-wal";
             storage = {
               type = "local";
-              local.directory = "/etc/loki/rules";   # rules under <dir>/<tenant>/ -> fake/
+              local.directory = "/etc/loki/rules"; # rules under <dir>/<tenant>/ -> fake/
             };
           };
         };
@@ -208,27 +217,39 @@ in
 
       # Alertmanager -> the ntfy bridge. additive under the existing prometheus.
       services.prometheus.alertmanager = {
-        enable        = true;
+        enable = true;
         listenAddress = "127.0.0.1";
-        port          = alertmanagerPort;
-        webExternalUrl = lib.mkIf (cfg.server.alertmanagerExternalUrl != null)
-          cfg.server.alertmanagerExternalUrl;
+        port = alertmanagerPort;
+        webExternalUrl = lib.mkIf (
+          cfg.server.alertmanagerExternalUrl != null
+        ) cfg.server.alertmanagerExternalUrl;
         configuration = {
           route = {
-            receiver        = "ntfy";
-            group_by        = [ "alertname" "host" ];
-            group_wait      = "30s";
-            group_interval  = "5m";
+            receiver = "ntfy";
+            # host: the label log alerts carry (sum by (host)); instance: the label
+            # the Prometheus metric + cert alerts carry. Both listed so each kind
+            # groups per box (a label absent on one kind groups as empty there).
+            group_by = [
+              "alertname"
+              "host"
+              "instance"
+            ];
+            group_wait = "30s";
+            group_interval = "5m";
             repeat_interval = "4h";
           };
           # the bridge formats it into a real ntfy notification
-          receivers = [{
-            name = "ntfy";
-            webhook_configs = [{
-              url           = "http://127.0.0.1:8000/hook";
-              send_resolved = true;
-            }];
-          }];
+          receivers = [
+            {
+              name = "ntfy";
+              webhook_configs = [
+                {
+                  url = "http://127.0.0.1:8000/hook";
+                  send_resolved = true;
+                }
+              ];
+            }
+          ];
         };
       };
 
@@ -237,7 +258,7 @@ in
       services.ntfy-sh = {
         enable = true;
         settings = {
-          base-url    = cfg.server.ntfyBaseUrl;
+          base-url = cfg.server.ntfyBaseUrl;
           listen-http = "127.0.0.1:2586";
         };
       };
@@ -257,14 +278,16 @@ in
 
       # add a Loki datasource to the existing Grafana (list merges, Prometheus
       # stays default). don't re-declare grafana itself.
-      services.grafana.provision.datasources.settings.datasources = [{
-        name      = "Loki";
-        type      = "loki";
-        uid       = "loki";
-        access    = "proxy";
-        url       = "http://127.0.0.1:${toString lokiPort}";
-        isDefault = false;
-      }];
+      services.grafana.provision.datasources.settings.datasources = [
+        {
+          name = "Loki";
+          type = "loki";
+          uid = "loki";
+          access = "proxy";
+          url = "http://127.0.0.1:${toString lokiPort}";
+          isDefault = false;
+        }
+      ];
 
       # admin password from sops (guarded so a pre-secret build still evals)
       services.grafana.settings.security = lib.mkIf (cfg.server.grafanaAdminPasswordFile != null) {
@@ -272,11 +295,13 @@ in
       };
 
       # dashboards from the repo, read-only in the UI
-      services.grafana.provision.dashboards.settings.providers = [{
-        name = "siem-lite";
-        options.path = ./siem-dashboards;
-        options.foldersFromFilesStructure = false;
-      }];
+      services.grafana.provision.dashboards.settings.providers = [
+        {
+          name = "siem-lite";
+          options.path = ./siem-dashboards;
+          options.foldersFromFilesStructure = false;
+        }
+      ];
 
       # grafana only applies admin_password on first db init, so re-apply it each
       # start to stop config/reality drifting. idempotent, never fails activation.

@@ -26,7 +26,13 @@ in
   fileSystems."/mnt/nas" = {
     device = "192.168.1.213:/srv/media";
     fsType = "nfs";
-    options = [ "nfsvers=4.2" "noatime" "nofail" "x-systemd.automount" "_netdev" ];
+    options = [
+      "nfsvers=4.2"
+      "noatime"
+      "nofail"
+      "x-systemd.automount"
+      "_netdev"
+    ];
   };
 
   systemd.services.mgmt-backup = {
@@ -34,7 +40,12 @@ in
     after = [ "network-online.target" ];
     wants = [ "network-online.target" ];
     unitConfig.RequiresMountsFor = [ "/mnt/nas" ];
-    path = [ pkgs.age pkgs.gnutar pkgs.coreutils pkgs.findutils ];
+    path = [
+      pkgs.age
+      pkgs.gnutar
+      pkgs.coreutils
+      pkgs.findutils
+    ];
     serviceConfig.Type = "oneshot"; # runs as root - tar reads the root-owned secret dirs
     script = ''
       set -euo pipefail

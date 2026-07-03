@@ -24,15 +24,18 @@ in
 {
   services.cockpit = {
     enable = true;
-    package = unstable.cockpit;   # match the plugin's vintage (363 vs the plugin's 353)
-    openFirewall = true;          # opens :9090 in the (nftables) firewall
+    package = unstable.cockpit; # match the plugin's vintage (363 vs the plugin's 353)
+    openFirewall = true; # opens :9090 in the (nftables) firewall
     # Cockpit rejects the post-login WebSocket if the browser Origin isn't allowed.
     # The module defaults to localhost only, so hitting it by IP (as the launchpad
     # tile did) authenticates but then drops the session after ~16s. The primary URL
     # is now the mgmt-fronted https://cockpit.mgmt.lan (trusted step-ca cert — see
     # mgmt nginx.nix); the direct IP is kept for on-box debugging. (Both merge with
     # the module's localhost default.)
-    allowed-origins = [ "https://cockpit.mgmt.lan" "https://192.168.1.217:9090" ];
+    allowed-origins = [
+      "https://cockpit.mgmt.lan"
+      "https://192.168.1.217:9090"
+    ];
   };
 
   # The Virtual Machines plugin. Discovered via the base module's
