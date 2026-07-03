@@ -90,6 +90,12 @@ in
       serverProperties = {
         motd = "All the Mons @ hacktop";
         difficulty = "normal";
+        # The server is publicly reachable via the cloud1 proxy, and the
+        # masquerade makes every player 10.100.0.1 to us - IP bans are
+        # meaningless, so the username whitelist is the only gate. Manage
+        # entries with the declarative `whitelist` option (name -> UUID).
+        white-list = true;
+        enforce-whitelist = true;
         allow-flight = true;
         max-tick-time = 180000;
         simulation-distance = 5;

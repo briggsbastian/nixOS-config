@@ -11,6 +11,7 @@
     ./hardware-configuration.nix
     ./forgejo-runner.nix
     ./minecraft.nix
+    ./wg-proxy.nix
   ];
 
   # Bootloader (matches the live install: systemd-boot on the ESP).
