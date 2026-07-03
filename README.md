@@ -14,13 +14,20 @@ servers stay on stable (nixos-25.11).
 | mgmt | The LAN's core: AdGuard DNS, an nginx + step-ca reverse proxy, Prometheus/Grafana, a Loki + Alloy log stack with Alertmanager/ntfy alerts, NetBox, Forgejo, a Harmonia cache, and PXE boot. It runs DNS and PKI for the house, so I deploy it carefully. [Details](hosts/lan/mgmt/README.md). |
 | media | Jellyfin, the *arr stack, and Kavita, served off the NAS over NFS. |
 | playground | A libvirt security lab with a Guacamole gateway and a Cockpit VM console. |
-| hacktop | Staging, CI builds, and a Cobblemon Minecraft server. |
-| cloud1 | A Linode VPS, installed with disko + nixos-anywhere. |
+| hacktop | Staging, CI builds, and the ATMons Minecraft server. |
+| cloud1 | A Linode VPS, installed with disko + nixos-anywhere. Public front door for the Minecraft server. |
 
 Internal services sit behind a private CA. They're reached at `*.mgmt.lan` (AdGuard
 resolves the names) over TLS from step-ca, and hosts pull from mgmt's binary cache.
 The shared baseline (key-only SSH, nftables, the `deploy` user, sops, the Alloy log
 shipper, CA trust) lives in [modules/](modules).
+
+The one public service is Minecraft at `play.briggsbastian.com`: the DNS name is an
+A record on cloud1, which DNATs `:25565` down a WireGuard tunnel to hacktop
+([hosts/cloud/cloud1/proxy.nix](hosts/cloud/cloud1/proxy.nix) and
+[hosts/lan/hacktop/wg-proxy.nix](hosts/lan/hacktop/wg-proxy.nix)). hacktop dials out
+and keeps the tunnel alive, so no home ports are open; the username whitelist is the
+only gate, since the masquerade hides player IPs.
 
 ## Layout
 
