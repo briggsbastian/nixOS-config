@@ -25,9 +25,9 @@
       url = "git+ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git?ref=main";
       inputs.nixpkgs.follows = "nixpkgs-stable";
     };
-    # Declarative Minecraft servers (Fabric/vanilla launchers, mod symlinks).
-    # Used by hacktop for the AllTheMons Cobblemon server; follows stable like
-    # the servers it runs on.
+    # Declarative Minecraft servers (NeoForge/Fabric/vanilla launchers, mod
+    # symlinks). Used by hacktop for the All the Mons (ATMons) modpack server;
+    # follows stable like the servers it runs on.
     nix-minecraft = {
       url = "github:Infinidoge/nix-minecraft";
       inputs.nixpkgs.follows = "nixpkgs-stable";

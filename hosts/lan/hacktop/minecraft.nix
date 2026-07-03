@@ -1,35 +1,49 @@
 # hosts/lan/hacktop/minecraft.nix
 #
-# AllTheMons Cobblemon server (Minecraft 1.21.1, Fabric). hacktop has the
-# fleet's RAM headroom (32 GB, ~29 available), so the game server lives here
-# alongside the CI runner. Fully declarative via nix-minecraft: launcher,
-# mods, and the AllTheMons datapack are all pinned store paths, so a rebuild
-# reproduces the server exactly (world state lives in /srv/minecraft).
+# All the Mons (ATMons) modpack server (Minecraft 1.21.1, NeoForge 21.1.234).
+# hacktop has the fleet's RAM headroom (32 GB, ~29 available), so the game
+# server lives here alongside the CI runner.
 #
-# AllTheMons is NOT a standalone modpack - it's a datapack + resource-pack
-# addon for Cobblemon. Server side: the zip goes in world/datapacks. Client
-# side: players need the same zip as a resource pack; server.properties
-# pushes it to them on join (require-resource-pack), so vanilla-ish clients
-# only need Fabric + Cobblemon + Fabric API installed manually.
+# ATMons is a full CurseForge modpack (373 mods + KubeJS scripts), not the
+# old AllTheMons-datapack-on-Cobblemon setup this replaced. Server side is
+# fully declarative: nix-minecraft's offline NeoForge launcher plus the
+# pack's official ServerFiles zip, unpacked into pinned store paths. Clients
+# must run the matching "All the Mons 1.0.1" pack from the CurseForge app -
+# a vanilla/Fabric client can no longer join.
 #
-# Version pins (bump together - AllTheMons 3.5.x needs Cobblemon 1.7+):
-#   Fabric API 0.116.13+1.21.1 / Cobblemon 1.7.3+1.21.1 / AllTheMons R3.5.1
+# The old Fabric world is preserved at /srv/minecraft/allthemons on hacktop;
+# this server starts fresh in /srv/minecraft/atmons.
+#
+# The ServerFiles zip is ~1 GB. The mediafilez URL is CurseForge's stable
+# CDN; to avoid re-downloading when the store path gets GC'd, pre-seed from
+# a local copy with: nix-store --add-fixed sha256 ServerFiles-1.0.1.zip
 { config, pkgs, lib, inputs, ... }:
 
 let
-  fabricApi = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/P7dR8mSH/versions/FHknjVVa/fabric-api-0.116.13%2B1.21.1.jar";
-    hash = "sha512-h6jhNsQ/A9Ca+W1rKzXSe1hnnWGhWFhUd/vMklDsr4pYlqGKmxMr3WuLzRuikazXH5YdWJh+dwuac7ZTrCN8Lw==";
+  serverFiles = pkgs.fetchurl {
+    # "All the Mons - ATMons" project 1356598, server pack file 8360747
+    url = "https://mediafilez.forgecdn.net/files/8360/747/ServerFiles-1.0.1.zip";
+    hash = "sha256-FXK/iFkcwAJJwnZTnzvmzvKb9a8YM6KZfpJjPHxtLck=";
   };
-  cobblemon = pkgs.fetchurl {
-    url = "https://cdn.modrinth.com/data/MdwFAVRL/versions/kF7CvxTo/Cobblemon-fabric-1.7.3%2B1.21.1.jar";
-    hash = "sha512-e1N29fSBd9tTeQI3tvslN4gGlytdO3VhUbTY8tPCcjjWtYe3faQivBeAv9NYtHAudDaf2CzvKjUwG0toovE8Lg==";
-  };
-  allTheMonsUrl = "https://cdn.modrinth.com/data/JV5dvqVX/versions/xP9xTsa0/AllTheMons%20%5BR3.5.1%5D.zip";
-  allTheMons = pkgs.fetchurl {
-    name = "AllTheMons-R3.5.1.zip";   # CDN filename has spaces/brackets
-    url = allTheMonsUrl;
-    hash = "sha512-PJzzIW28PSUIFjlqhaRHvQ2MfMVXeHMaI5ENm0G3l2WgUtDofNF0Vy9pj2IQGjesnqHZ+FGNglEQOlgAYdYxIQ==";
+
+  # Unpack once at build time; the zip has no top-level directory. Only the
+  # game content is kept - the bundled NeoForge installer and start scripts
+  # are replaced by nix-minecraft's offline launcher.
+  serverPack = pkgs.stdenvNoCC.mkDerivation {
+    pname = "atmons-server-pack";
+    version = "1.0.1";
+    src = serverFiles;
+    nativeBuildInputs = [ pkgs.unzip ];
+    sourceRoot = ".";
+    installPhase = ''
+      mkdir -p $out
+      cp -r config kubejs mods server-icon.png $out/
+      # Crash Assistant is a client-side crash-report GUI; its required mixin
+      # plugin dies at bootstrap on this setup (MixinInitialisationError for
+      # crash_assistant.mixins.json) and crash-loops the server. Not needed
+      # headless - drop it.
+      rm $out/mods/CrashAssistant-neoforge-*.jar
+    '';
   };
 in
 {
@@ -40,31 +54,58 @@ in
     enable = true;
     eula = true;
 
-    servers.allthemons = {
+    servers.atmons = {
       enable = true;
-      package = pkgs.fabricServers.fabric-1_21_1;
+      # Pin the exact loader build the pack ships (see startserver.sh in the zip).
+      package = pkgs.neoforgeServers.neoforge-1_21_1-21_1_234;
       openFirewall = true;   # 25565/tcp - LAN only, hacktop is behind NAT
 
-      # 32 GB box: a fixed 4-8 GB heap covers Cobblemon comfortably and still
-      # leaves >20 GB for CI builds.
-      jvmOpts = "-Xms4G -Xmx8G";
+      # Heap bounds match the pack's user_jvm_args.txt; the G1 flags are the
+      # pack-shipped (Aikar-style) tuning. 8 GB max still leaves >20 GB for
+      # CI builds.
+      jvmOpts = [
+        "-Xms4G"
+        "-Xmx8G"
+        "-XX:+UseG1GC"
+        "-XX:+ParallelRefProcEnabled"
+        "-XX:MaxGCPauseMillis=200"
+        "-XX:+UnlockExperimentalVMOptions"
+        "-XX:+DisableExplicitGC"
+        "-XX:+AlwaysPreTouch"
+        "-XX:G1NewSizePercent=30"
+        "-XX:G1MaxNewSizePercent=40"
+        "-XX:G1HeapRegionSize=8M"
+        "-XX:G1ReservePercent=20"
+        "-XX:G1HeapWastePercent=5"
+        "-XX:G1MixedGCCountTarget=4"
+        "-XX:InitiatingHeapOccupancyPercent=15"
+        "-XX:G1MixedGCLiveThresholdPercent=90"
+        "-XX:G1RSetUpdatingPauseTimePercent=5"
+        "-XX:SurvivorRatio=32"
+        "-XX:+PerfDisableSharedMem"
+        "-XX:MaxTenuringThreshold=1"
+      ];
 
+      # Pack-recommended settings from its startserver.sh, plus our motd.
       serverProperties = {
-        motd = "AllTheMons Cobblemon @ hacktop";
+        motd = "All the Mons @ hacktop";
         difficulty = "normal";
-        view-distance = 12;
-        # Push the AllTheMons resource pack to clients on join; sha1 is the
-        # Modrinth-published file hash, so clients cache-validate correctly.
-        resource-pack = allTheMonsUrl;
-        resource-pack-sha1 = "24cad3bdd37e658213d6186581e1533b4f1fe96a";
-        require-resource-pack = true;
+        allow-flight = true;
+        max-tick-time = 180000;
+        simulation-distance = 5;
+        view-distance = 8;
       };
 
+      # Mods are fine read-only; NeoForge's config system rewrites files in
+      # config/ at startup (and KubeJS can too), so those go in as writable
+      # copies - refreshed from the store on every start, edits discarded.
       symlinks = {
-        mods = pkgs.linkFarmFromDrvs "mods" [ fabricApi cobblemon ];
-        # Datapack must sit inside the world dir; nix-minecraft creates the
-        # parent path, and the server picks it up at world creation/load.
-        "world/datapacks/AllTheMons-R3.5.1.zip" = allTheMons;
+        mods = "${serverPack}/mods";
+        "server-icon.png" = "${serverPack}/server-icon.png";
+      };
+      files = {
+        config = "${serverPack}/config";
+        kubejs = "${serverPack}/kubejs";
       };
     };
   };
