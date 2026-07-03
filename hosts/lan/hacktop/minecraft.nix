@@ -94,7 +94,10 @@ in
 
       # Pack-recommended settings from its startserver.sh, plus our motd.
       serverProperties = {
-        motd = "All the Mons @ hacktop";
+        # § is the Minecraft color-code marker (section sign); Java's
+        # Properties parser decodes the escapes, giving each meow its own
+        # color (red/gold/green/light-purple).
+        motd = "\\u00A7cmeow \\u00A76meow \\u00A7ameow \\u00A7dmeow";
         difficulty = "normal";
         # Open to anyone: no whitelist by choice. Note the server is publicly
         # reachable via the cloud1 proxy, and its masquerade makes every
@@ -112,7 +115,10 @@ in
       # copies - refreshed from the store on every start, edits discarded.
       symlinks = {
         mods = "${serverPack}/mods";
-        "server-icon.png" = "${serverPack}/server-icon.png";
+        # Pancham beats the pack's stock icon. Must be exactly 64x64 PNG;
+        # regenerate with: magick <src> -resize 64x64^ -gravity center
+        # -extent 64x64 pancham-icon.png
+        "server-icon.png" = ./pancham-icon.png;
       };
       files = {
         config = "${serverPack}/config";
