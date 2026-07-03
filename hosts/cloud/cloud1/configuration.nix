@@ -11,6 +11,7 @@
   imports = [
     ./disko.nix
     ./hardware-configuration.nix
+    ./proxy.nix
   ];
 
   networking.hostName = "cloud1";
