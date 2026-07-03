@@ -16,6 +16,8 @@ keys:
   - &host_media   age1a2mja5xrrn62nckuu8d5yjwxuyhmxmr7v0w438ye33neyj4xrcmsz9rwlt
   - &host_playground   age1gz2uhnzy9e504kwnqs4mzm9x2hrmq7uql4pq8m9aj77l2364kcash88c62
   - &host_mgmt    age18eq2h82ta0rjyfzhd9d02c6lqun2qtwkqa5mwva76kdeqzlscajqaepyeu
+  # derived from the 2026-07-02 nixos-anywhere install's host key; re-key on re-image
+  - &host_cloud1  age1ckp25txejnsn8jaf2s03q8nsxkymmf8qd557h449euza6ez5sggqjk3qlq
 
 creation_rules:
   # Per-host secrets: decryptable by you + that one host.
@@ -39,6 +41,11 @@ creation_rules:
       - age:
           - *admin
           - *host_mgmt
+  - path_regex: secrets/cloud1\.yaml$
+    key_groups:
+      - age:
+          - *admin
+          - *host_cloud1
 
   # Fallback: anything else under secrets/ is shared by you + all hosts.
   - path_regex: secrets/[^/]+\.yaml$
