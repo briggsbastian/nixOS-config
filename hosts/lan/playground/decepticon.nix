@@ -63,6 +63,16 @@
   # / `htb ip` to see the tunnel state. It's on every shell's PATH here, and the
   # desktop aliases it over SSH (hosts/workstation/desktop/dotfiles/zsh.nix), so
   # the same word works from the box, over SSH, or in Cockpit's terminal.
+  #
+  # `decep` is the one-word driver for the whole lab: `decep up` brings the HTB
+  # VPN up (via htb) AND the Decepticon stack up in a detached tmux session
+  # running `make dogfood` (upstream's interactive launcher - Decepticon is
+  # tmux-native, so we keep it attachable rather than daemonising it). `decep cli`
+  # attaches that session; `decep status` shows VPN + containers + session;
+  # `decep down` stops the stack (WITHOUT wiping volumes) + VPN; `decep web`
+  # prints the tunnel one-liner (the desktop's `decep` function actually opens
+  # it - see zsh.nix). The stack runs as the playground user (docker group), so
+  # decep needs no sudo of its own; the only privileged step is delegated to htb.
   environment.systemPackages = with pkgs; [
     gnumake
     docker-compose
@@ -101,6 +111,79 @@
               echo "tun0 down"
             fi ;;
           *) echo "usage: htb {up|down|restart|status|ip}"; exit 1 ;;
+        esac
+      '';
+    })
+    (writeShellApplication {
+      name = "decep";
+      # tmux only; `docker`/`make`/`htb`/`decepticon` come from the system PATH
+      # (the host runs docker_29 - pulling pkgs.docker here would drag in the
+      # insecure default docker 28.x and refuse to build).
+      runtimeInputs = [ tmux ];
+      text = ''
+        dir=/home/playground/Decepticon
+        session=decepticon
+        web_url="http://localhost:3000/web"
+
+        need_checkout() {
+          if [ ! -d "$dir" ]; then
+            echo "Decepticon checkout not found at $dir."
+            echo "Clone it first:  git clone https://github.com/PurpleAILAB/Decepticon.git $dir"
+            echo "Then run 'decep onboard' once (API keys), and 'decep up'."
+            exit 1
+          fi
+        }
+
+        case "''${1:-status}" in
+          up)
+            htb up || true
+            need_checkout
+            if tmux has-session -t "$session" 2>/dev/null; then
+              echo "Decepticon: already running (tmux '$session'). 'decep cli' to attach."
+            else
+              tmux new-session -d -s "$session" -c "$dir" 'make dogfood'
+              echo "Decepticon: starting in tmux '$session' (first run builds images - be patient)."
+              echo "Attach with 'decep cli'; open the web UI with 'decep web'."
+            fi ;;
+          cli|attach)
+            if tmux has-session -t "$session" 2>/dev/null; then
+              exec tmux attach -t "$session"
+            else
+              echo "Decepticon isn't running. Start it with 'decep up'."; exit 1
+            fi ;;
+          status)
+            htb status || true
+            echo
+            if tmux has-session -t "$session" 2>/dev/null; then
+              echo "session: up (tmux '$session')"
+            else
+              echo "session: none"
+            fi
+            if [ -d "$dir" ]; then
+              echo "--- containers ---"
+              ( cd "$dir" && docker compose ps ) || true
+            else
+              echo "checkout: missing ($dir)"
+            fi ;;
+          web)
+            echo "Web dashboard is localhost-only on playground. From your workstation:"
+            echo "  ssh -fNT -L 3000:127.0.0.1:3000 playground@192.168.1.217 && xdg-open $web_url"
+            echo "(the desktop 'decep web' does this for you.)" ;;
+          logs)
+            need_checkout
+            ( cd "$dir" && docker compose logs -f ) ;;
+          onboard)
+            need_checkout
+            ( cd "$dir" && decepticon onboard ) ;;
+          down)
+            if [ -d "$dir" ]; then
+              ( cd "$dir" && docker compose down ) || true
+            fi
+            tmux kill-session -t "$session" 2>/dev/null || true
+            htb down || true
+            echo "Decepticon: stopped (data volumes preserved), VPN down." ;;
+          *)
+            echo "usage: decep {up|cli|status|web|logs|onboard|down}"; exit 1 ;;
         esac
       '';
     })
