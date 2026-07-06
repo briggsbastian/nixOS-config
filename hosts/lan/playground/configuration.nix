@@ -26,6 +26,7 @@
     ./guacamole.nix
     ./cockpit.nix
     ./decepticon.nix
+    ./shell.nix
   ];
 
   boot.loader.systemd-boot.enable = true;
