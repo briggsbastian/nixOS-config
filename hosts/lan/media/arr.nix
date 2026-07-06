@@ -85,9 +85,10 @@
       ControlIP = "0.0.0.0";
       ControlPort = 6789;
       # throughput: Eweka allows 50 SSL connections; 8 was the bottleneck.
+      # 50 (provider max) because the ~160ms RTT to NL caps each connection low.
       # Cache+buffer assemble articles in RAM (box has 16G) instead of small
       # NFS writes; direct rename/unpack overlap post-processing with download.
-      "Server1.Connections" = 30;
+      "Server1.Connections" = 50;
       ArticleCache = 500;
       WriteBuffer = 1024;
       DirectRename = "yes";

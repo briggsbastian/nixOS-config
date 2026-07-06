@@ -49,5 +49,17 @@
   # ship the journal to central Loki on mgmt
   alcove.siemLite.agent.enable = true;
 
+  # Usenet runs ~160ms RTT to Eweka (NL); BBR + bigger TCP windows lift
+  # per-connection throughput on that long fat pipe. fq is BBR's pacing qdisc.
+  boot.kernelModules = [ "tcp_bbr" ];
+  boot.kernel.sysctl = {
+    "net.ipv4.tcp_congestion_control" = "bbr";
+    "net.core.default_qdisc" = "fq";
+    "net.core.rmem_max" = 16777216;
+    "net.core.wmem_max" = 16777216;
+    "net.ipv4.tcp_rmem" = "4096 1048576 16777216";
+    "net.ipv4.tcp_wmem" = "4096 65536 16777216";
+  };
+
   system.stateVersion = "25.11";
 }
