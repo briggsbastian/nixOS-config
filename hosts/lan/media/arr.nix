@@ -93,6 +93,13 @@
       WriteBuffer = 1024;
       DirectRename = "yes";
       DirectUnpack = "yes";
+      # hygiene: pause before the local intermediate disk actually fills;
+      # bigger par2 verify buffer (box has 16G); delete unrepairable downloads
+      # so Sonarr/Radarr's failed-download handling grabs a replacement instead
+      # of parking them for manual repair
+      DiskSpace = 10240;
+      ParBuffer = 256;
+      HealthCheck = "Delete";
       "Category1.Name" = "tv";
       "Category1.DestDir" = "/mnt/media/data/nzbget/completed/tv";
       "Category2.Name" = "movies";
