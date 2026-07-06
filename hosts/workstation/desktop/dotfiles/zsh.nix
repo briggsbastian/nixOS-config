@@ -66,6 +66,13 @@ _: {
             echo "  Run 'decep cli', bring the stack up, then spawn the UI with '/web' - and retry."
             return 1
           fi
+          # Idempotent: kill any tunnel left over from a prior run FIRST. Without
+          # this, a stale/broken tunnel from an earlier attempt keeps squatting on
+          # 3000/3003, the fresh ssh -L below silently fails to rebind it, and
+          # xdg-open opens whatever the OLD tunnel happens to still be connected to
+          # - looking like it opened "the wrong machine" when it's really just a
+          # leftover process from before.
+          pkill -f "ssh -fNT .*$host" 2>/dev/null || true
           ssh -fNT -L 3000:127.0.0.1:3000 -L 3003:127.0.0.1:3003 "$host" \
             && xdg-open http://localhost:3000/web \
             && echo "decep web: tunnels up (3000 + 3003). Browser -> localhost:3000/web. 'decep web stop' to close."
