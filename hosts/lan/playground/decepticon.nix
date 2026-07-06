@@ -5,9 +5,9 @@
 # stands up its own management-plane + sandbox stack (LiteLLM proxy, PostgreSQL,
 # Neo4j, LangGraph, and an isolated target/C2 sandbox) and pulls its images at
 # runtime. There is no nixpkgs package, and the tool manages its own Compose
-# lifecycle + an interactive `decepticon onboard` wizard - so Nixifying the whole
-# stack into virtualisation.oci-containers would fight the CLI and rot on every
-# upstream bump.
+# lifecycle via a Go launcher binary with an interactive onboarding wizard - so
+# Nixifying the whole stack into virtualisation.oci-containers would fight the
+# CLI and rot on every upstream bump.
 #
 # So this module declares only the *substrate* - Docker + Compose + the build
 # toolchain - and Decepticon runs from a source checkout on top of it, the same
@@ -19,17 +19,23 @@
 # the docker-group membership below needs a fresh login/session to take effect):
 #
 #   git clone https://github.com/PurpleAILAB/Decepticon.git ~/Decepticon
-#   cd ~/Decepticon
-#   make dogfood            # bring up the full OSS stack against local code
-#   # or, for the packaged CLI instead of a source checkout:
-#   #   pipx install decepticon           # + `pipx install 'decepticon[neo4j]'`
-#   decepticon onboard      # interactive wizard: API keys + model/provider tiers
+#   decep up                # == `make dogfood`: builds the Go launcher (clients/
+#                            # launcher, needs the `go` toolchain below), then runs
+#                            # it - it onboards (API keys + model tiers) INLINE on
+#                            # first run, then engagement picker -> compose up -> CLI
+#
+# There is no separate manual onboarding step for this flow - `decep onboard`
+# exists only to RE-run the wizard later (change keys/tiers) via the already-built
+# local launcher binary (clients/launcher/bin/decepticon). The upstream top-level
+# README's `decepticon onboard` (bare, no path) refers to the PACKAGED CLI
+# (`pipx install decepticon`), a from-scratch alternative to this source-checkout
+# flow - don't mix the two: a bare `decepticon` is never installed here.
 #
 # The onboard wizard writes its own credential/config state under the checkout
 # (or ~/.decepticon); that mutable state is intentionally NOT Nix-managed. If you
 # later want the LLM API keys sops-managed, add them to secrets/playground.yaml
 # (playground already decrypts its own secrets - see .sops.yaml) and source the
-# rendered file into the environment before `make dogfood` / `decepticon`.
+# rendered file into the environment before `decep up`.
 #
 # NETWORKING: the stack binds its service/UI ports itself via Compose. They are
 # deliberately left OFF the host firewall here - reach them from your workstation
@@ -54,9 +60,13 @@
   users.users.playground.extraGroups = [ "docker" ];
 
   # Build/run toolchain for the source checkout + optional packaged CLI.
-  # git/curl are already in common.nix; gnumake drives upstream's `make dogfood`,
-  # docker-compose is the v2 CLI Decepticon shells out to, and python3 + pipx
-  # cover `pipx install decepticon` if you prefer the published CLI over source.
+  # git/curl are already in common.nix; gnumake drives upstream's `make dogfood`;
+  # go builds the Go launcher binary that `make dogfood`/`make launcher` produces
+  # at clients/launcher/bin/decepticon (go.mod pins 1.25.8 - pkgs.go on 25.11 is
+  # newer, which satisfies it); gcc because the launcher pulls in a cgo dependency
+  # (clipboard access) and fails to link without a C compiler on PATH; docker-compose
+  # is the v2 CLI Decepticon shells out to; python3 + pipx cover `pipx install
+  # decepticon` if you prefer the published CLI over source.
   #
   # `htb` is a tiny convenience wrapper for the VPN toggle below - `htb up|down`
   # (no password prompt, see the scoped sudo rule further down), plus `htb status`
@@ -75,6 +85,8 @@
   # decep needs no sudo of its own; the only privileged step is delegated to htb.
   environment.systemPackages = with pkgs; [
     gnumake
+    go
+    gcc
     docker-compose
     python3
     pipx
@@ -116,12 +128,15 @@
     })
     (writeShellApplication {
       name = "decep";
-      # tmux only; `docker`/`make`/`htb`/`decepticon` come from the system PATH
-      # (the host runs docker_29 - pulling pkgs.docker here would drag in the
-      # insecure default docker 28.x and refuse to build).
+      # tmux only; `docker`/`make`/`go`/`htb` come from the system PATH (the host
+      # runs docker_29 - pulling pkgs.docker here would drag in the insecure
+      # default docker 28.x and refuse to build). The Decepticon launcher binary
+      # itself is never on PATH - it's built locally by `make`/`make launcher`
+      # into the checkout, and referenced here by its full path ($launcher).
       runtimeInputs = [ tmux ];
       text = ''
         dir=/home/playground/Decepticon
+        launcher="$dir/clients/launcher/bin/decepticon"
         session=decepticon
         web_url="http://localhost:3000/web"
 
@@ -129,7 +144,7 @@
           if [ ! -d "$dir" ]; then
             echo "Decepticon checkout not found at $dir."
             echo "Clone it first:  git clone https://github.com/PurpleAILAB/Decepticon.git $dir"
-            echo "Then run 'decep onboard' once (API keys), and 'decep up'."
+            echo "Then run 'decep up' - onboarding (API keys) happens inline on first run."
             exit 1
           fi
         }
@@ -173,8 +188,16 @@
             need_checkout
             ( cd "$dir" && docker compose logs -f ) ;;
           onboard)
+            # Re-runs the onboard wizard standalone (change API keys/model
+            # tiers) via the LOCAL launcher binary make dogfood builds - there
+            # is no global `decepticon` command in this setup (see the
+            # top-of-file note). Builds it first if `decep up` hasn't yet.
             need_checkout
-            ( cd "$dir" && decepticon onboard ) ;;
+            if [ ! -x "$launcher" ]; then
+              echo "Launcher not built yet - building it (make launcher)..."
+              ( cd "$dir" && make launcher )
+            fi
+            ( cd "$dir" && "$launcher" onboard ) ;;
           down)
             if [ -d "$dir" ]; then
               ( cd "$dir" && docker compose down ) || true
