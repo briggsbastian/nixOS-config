@@ -26,6 +26,7 @@
     ./guacamole.nix
     ./cockpit.nix
     ./htb.nix
+    ./decepticon.nix
     ./shell.nix
     ./neovim.nix
     ./tmux.nix
