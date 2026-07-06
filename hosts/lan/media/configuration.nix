@@ -32,6 +32,19 @@
   # Headless - GNOME from the original install is stripped; everything is reached
   # over the network.
 
+  # Intel N150 iGPU for Jellyfin Quick Sync: iHD VAAPI driver, oneVPL runtime
+  # (QSV on Gen12+ Xe), and OpenCL for HDR->SDR tone mapping. Jellyfin gets
+  # /dev/dri access via SupplementaryGroups in arr.nix; enable QSV in
+  # Dashboard -> Playback -> Transcoding after deploy.
+  hardware.graphics = {
+    enable = true;
+    extraPackages = with pkgs; [
+      intel-media-driver
+      vpl-gpu-rt
+      intel-compute-runtime
+    ];
+  };
+
   # --- User ------------------------------------------------------------------
   users.users.media = {
     isNormalUser = true;

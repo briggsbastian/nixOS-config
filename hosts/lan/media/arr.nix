@@ -169,7 +169,12 @@
   # arrs start after the download client and indexer
   systemd.services = {
     nzbget.unitConfig.RequiresMountsFor = [ "/mnt/media" ];
-    jellyfin.unitConfig.RequiresMountsFor = [ "/mnt/media" ];
+    jellyfin = {
+      unitConfig.RequiresMountsFor = [ "/mnt/media" ];
+      # render group for /dev/dri/renderD128 (QSV); on the unit rather than
+      # the media user so the switch restarts jellyfin and picks it up
+      serviceConfig.SupplementaryGroups = [ "render" ];
+    };
     kavita.unitConfig.RequiresMountsFor = [ "/mnt/media" ];
     sonarr = {
       unitConfig.RequiresMountsFor = [ "/mnt/media" ];
