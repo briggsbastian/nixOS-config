@@ -152,6 +152,10 @@ in
 
     extraPackages = [ unstable.opencode ];
     extraPlugins = [
+      # pairs with tmuxPlugins.vim-tmux-navigator in tmux.nix: Ctrl-hjkl moves
+      # seamlessly between tmux panes and nvim splits. Sets its own <C-h/j/k/l>
+      # mappings by default, nothing else to wire up.
+      pkgs.vimPlugins.vim-tmux-navigator
       (pkgs.vimUtils.buildVimPlugin {
         pname = "99";
         version = "2026-06-11";

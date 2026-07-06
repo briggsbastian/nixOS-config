@@ -28,6 +28,8 @@
     ./decepticon.nix
     ./shell.nix
     ./neovim.nix
+    ./tmux.nix
+    ./devenv.nix
   ];
 
   boot.loader.systemd-boot.enable = true;
