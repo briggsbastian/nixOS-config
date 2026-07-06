@@ -107,6 +107,46 @@
     };
   };
 
+  # Recyclarr: daily oneshot that syncs TRaSH-guide quality definitions,
+  # custom formats and quality profiles into Sonarr (WEB-1080p) and Radarr
+  # (HD Bluray+WEB, plus Remux+WEB 2160p for the remux collection). Clones the
+  # trash-guides/config-templates repos from GitHub on every sync. API keys
+  # come from sops via systemd LoadCredential; the recyclarr user never reads
+  # the root-owned secret files directly.
+  #
+  # NOTE: `include.template` is a recyclarr v7 mechanism kept in maintenance
+  # mode upstream - when nixpkgs bumps recyclarr to 8.x these includes stop
+  # resolving; migrate to guide-backed `quality_profiles.trash_id` entries or
+  # pin services.recyclarr.package.
+  sops.secrets.sonarr_api_key.sopsFile = ../../../secrets/media.yaml;
+  sops.secrets.radarr_api_key.sopsFile = ../../../secrets/media.yaml;
+  services.recyclarr = {
+    enable = true;
+    configuration = {
+      # instance names must be unique across the sonarr AND radarr sections
+      sonarr.tv = {
+        base_url = "http://127.0.0.1:8989";
+        api_key._secret = config.sops.secrets.sonarr_api_key.path;
+        include = [
+          { template = "sonarr-quality-definition-series"; }
+          { template = "sonarr-v4-quality-profile-web-1080p"; }
+          { template = "sonarr-v4-custom-formats-web-1080p"; }
+        ];
+      };
+      radarr.movies = {
+        base_url = "http://127.0.0.1:7878";
+        api_key._secret = config.sops.secrets.radarr_api_key.path;
+        include = [
+          { template = "radarr-quality-definition-movie"; }
+          { template = "radarr-quality-profile-hd-bluray-web"; }
+          { template = "radarr-custom-formats-hd-bluray-web"; }
+          { template = "radarr-quality-profile-remux-web-2160p"; }
+          { template = "radarr-custom-formats-remux-web-2160p"; }
+        ];
+      };
+    };
+  };
+
   # Kavita: books/comics/manga reader. Library on the NAS under
   # /mnt/media/Media/{Books,Comics,Audiobooks}; add those in the web UI on first
   # run. JWT signing key from sops.
