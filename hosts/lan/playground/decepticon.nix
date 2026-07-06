@@ -14,37 +14,48 @@
 # way upstream's `make dogfood` flow expects. Lives on playground because that is
 # the fleet's security-lab host (Kali lab + Guacamole; see ./configuration.nix
 # and Project 1). Baseline is in ../../../modules/common.nix. HTB VPN connectivity
-# lives separately in ./htb.nix (kept standalone even when this module was briefly
-# removed and re-added - see git history).
+# lives separately in ./htb.nix.
 #
-# KNOWN UPSTREAM BUG (as of commit 4a8c953, 2026-07-04): the onboarding wizard's
-# "LangSmith API Key" field (a masked/password text input, only rendered if you
-# answer "Yes" to "Enable LangSmith?") deterministically crashes the launcher -
-# `panic: interface conversion: tea.Model is nil, not compat.ViewModel`, itself
-# triggered by `runtime error: makeslice: len out of range` inside
-# charm.land/bubbles/v2's textinput.Model.placeholderView. Confirmed NOT a
-# terminal-size/tmux artifact (reproduces identically with correctly-sized ptys)
-# and NOT fixed by bumping bubbles/v2 to the latest release. A similar crash also
-# hits when RE-SELECTING an already-created engagement (internal/engagement/
-# picker.go's Select() incorrectly falls into promptNewSlug()). Neither is
-# reported upstream yet. Workaround: answer "No" to "Enable LangSmith?" during
-# onboarding (skips the buggy field entirely - this is why the very first
-# onboarding attempt worked and a later one didn't), and avoid detaching and
-# re-selecting an existing engagement until upstream fixes the Select() bug.
+# RUN IT IN THE FOREGROUND - NOT TMUX. Earlier revisions of this module wrapped
+# the launcher in a detached tmux session for attach/detach convenience. That
+# wrapping is what was actually causing a deterministic crash in the onboarding
+# wizard and in engagement selection (`panic: interface conversion: tea.Model is
+# nil, not compat.ViewModel`, from `runtime error: makeslice: len out of range`
+# in charm.land/bubbles/v2's textinput rendering) - confirmed by running the
+# exact same binary directly in a real, attached terminal with no tmux involved
+# at all, which worked cleanly every time. Bumping bubbles/v2, matching tmux's
+# pty size to the real terminal, and flooring the size all failed to fix it,
+# because the tmux layer itself was the problem, not its sizing. `decep up`
+# below therefore just `exec`s `make dogfood` directly - no session to manage,
+# no attach step, no crash. The trade-off: the process ends if your SSH session
+# drops. Acceptable for now; revisit only if that becomes a real problem.
 #
 # ONE-TIME SETUP (imperative, done as the `playground` user after this deploys;
 # the docker-group membership below needs a fresh login/session to take effect):
 #
 #   git clone https://github.com/PurpleAILAB/Decepticon.git ~/Decepticon
-#   decep up                # == `make dogfood`: builds the Go launcher (clients/
-#                            # launcher, needs the `go` toolchain below), then runs
-#                            # it - it onboards (API keys + model tiers) INLINE on
-#                            # first run, then engagement picker -> compose up -> CLI
-#                            # Answer "No" to "Enable LangSmith?" - see the bug note above.
+#   decep up      # == `make dogfood` in your foreground terminal: builds the Go
+#                 # launcher (clients/launcher, needs the `go` toolchain below),
+#                 # then runs it - onboards (API keys + model tiers) inline on
+#                 # first run, then engagement picker -> compose build/up -> CLI.
 #
-# There is no separate manual onboarding step for this flow - `decep onboard`
-# exists only to RE-run the wizard later (change keys/tiers) via the already-built
-# local launcher binary (clients/launcher/bin/decepticon). The upstream top-level
+# KNOWN PORT CONFLICTS on THIS host (playground already runs Guacamole's own
+# Postgres, the fleet's node_exporter, and Cockpit) - Decepticon's compose reads
+# these from `.env`/`.dogfood/.env` as overrides, defaults in parens:
+#   POSTGRES_PORT=15432       (default 5432  - collides with Guacamole's DB)
+#   LANGGRAPH_PORT=12024      (default 2024  - collides with a host listener)
+#   LITELLM_PORT=14000        (default 4000  - collides with a host listener)
+#   SKILLOGY_REST_PORT=19100  (default 9100  - collides with node_exporter)
+# Set these in the `.env`/`.dogfood/.env` the onboard wizard writes (uncomment
+# the existing lines for the first three; SKILLOGY_REST_PORT has no placeholder,
+# just append it) BEFORE compose tries to bind them, or `make dogfood` fails with
+# "address already in use" partway through bringing containers up. This is
+# ordinary Compose port-collision handling, not a Decepticon bug - re-check with
+# `ss -tln` if a future upstream version adds/renames a host-bound port.
+#
+# There is no separate manual onboarding step - `decep onboard` exists only to
+# RE-run the wizard later (change keys/tiers) via the already-built local
+# launcher binary (clients/launcher/bin/decepticon). The upstream top-level
 # README's `decepticon onboard` (bare, no path) refers to the PACKAGED CLI
 # (`pipx install decepticon`), a from-scratch alternative to this source-checkout
 # flow - don't mix the two: a bare `decepticon` is never installed here.
@@ -86,14 +97,11 @@
   # is the v2 CLI Decepticon shells out to; python3 + pipx cover `pipx install
   # decepticon` if you prefer the published CLI over source.
   #
-  # `decep` is the one-word driver for the whole lab: `decep up` brings the HTB
-  # VPN up (via htb, see ./htb.nix) AND the Decepticon stack up in a detached tmux
-  # session running `make dogfood` (upstream's interactive launcher - Decepticon is
-  # tmux-native, so we keep it attachable rather than daemonising it). `decep cli`
-  # attaches that session; `decep status` shows VPN + containers + session;
-  # `decep down` stops the stack (WITHOUT wiping volumes) + VPN; `decep web`
-  # prints the tunnel one-liner (the desktop's `decep` function actually opens
-  # it - see zsh.nix). The stack runs as the playground user (docker group), so
+  # `decep` is the one-word driver for the lab: `decep up` brings the HTB VPN up
+  # (via htb, see ./htb.nix) then `exec`s `make dogfood` directly in your current
+  # terminal (see the top-of-file note on why NOT tmux). `decep status`/`down`/
+  # `web`/`logs`/`onboard` are simple, stateless helpers around the checkout - no
+  # session to track. The stack runs as the playground user (docker group), so
   # decep needs no sudo of its own; the only privileged step is delegated to htb.
   environment.systemPackages = with pkgs; [
     gnumake
@@ -104,19 +112,15 @@
     pipx
     (writeShellApplication {
       name = "decep";
-      # tmux only; `docker`/`make`/`go`/`htb` come from the system PATH (the host
-      # runs docker_29 - pulling pkgs.docker here would drag in the insecure
-      # default docker 28.x and refuse to build). The Decepticon launcher binary
-      # itself is never on PATH - it's built locally by `make`/`make launcher`
-      # into the checkout, and referenced here by its full path ($launcher).
-      runtimeInputs = [
-        tmux
-        iproute2
-      ];
+      # `docker`/`make`/`go`/`htb` come from the system PATH (the host runs
+      # docker_29 - pulling pkgs.docker here would drag in the insecure default
+      # docker 28.x and refuse to build). The Decepticon launcher binary itself
+      # is never on PATH - it's built locally by `make`/`make launcher` into the
+      # checkout, and referenced here by its full path ($launcher).
+      runtimeInputs = [ iproute2 ];
       text = ''
         dir=/home/playground/Decepticon
         launcher="$dir/clients/launcher/bin/decepticon"
-        session=decepticon
         web_url="http://localhost:3000/web"
 
         need_checkout() {
@@ -132,48 +136,15 @@
           up)
             htb up || true
             need_checkout
-            if tmux has-session -t "$session" 2>/dev/null; then
-              echo "Decepticon: already running (tmux '$session'). 'decep cli' to attach."
-            else
-              # Decepticon's launcher is a bubbletea/huh TUI that computes
-              # layout (incl. text-input widths) from the pty size at first
-              # render. A session created with plain `-d` gets tmux's internal
-              # default (80x24) for that very first frame, regardless of your
-              # actual terminal - and at some sizes that miscomputes a
-              # negative slice length and panics before you ever attach. Pass
-              # -x/-y from THIS terminal (the one running 'decep up') so the
-              # detached session's initial pty matches reality from frame one.
-              # (Confirmed this alone does NOT fix the known LangSmith-field
-              # crash above - kept anyway since it's still correct hygiene.)
-              cols=$(tput cols 2>/dev/null || echo 80)
-              lines=$(tput lines 2>/dev/null || echo 24)
-              # 'make dogfood' is the pane's only command, so if the launcher
-              # crashes or exits, tmux kills the session and takes the crash
-              # output with it. Tee to a log so a post-mortem doesn't need a
-              # live pty - 'decep logs-launcher' (or a plain cat) reads it back.
-              tmux new-session -d -s "$session" -x "$cols" -y "$lines" -c "$dir" \
-                'make dogfood 2>&1 | tee -a ~/decep-launcher.log'
-              echo "Decepticon: starting in tmux '$session' (first run builds images - be patient)."
-              echo "Attach with 'decep cli'; open the web UI with 'decep web'."
-            fi ;;
-          cli|attach)
-            if tmux has-session -t "$session" 2>/dev/null; then
-              exec tmux attach -t "$session"
-            else
-              echo "Decepticon isn't running. Start it with 'decep up'."; exit 1
-            fi ;;
+            cd "$dir"
+            exec make dogfood ;;
           status)
             htb status || true
             echo
-            if tmux has-session -t "$session" 2>/dev/null; then
-              echo "session: up (tmux '$session')"
-            else
-              echo "session: none"
-            fi
             if ss -tln 2>/dev/null | grep -q 127.0.0.1:3000; then
               echo "web: listening on :3000 (reach it with 'decep web')"
             else
-              echo "web: not up (bring the stack up in 'decep cli', then spawn it with '/web')"
+              echo "web: not up (bring the stack up with 'decep up', then spawn it with '/web')"
             fi
             if [ -d "$dir" ]; then
               echo "--- containers ---"
@@ -187,15 +158,10 @@
             echo "ports tunnelled to this VM's localhost. From your workstation:"
             echo "  ssh -fNT -L 3000:127.0.0.1:3000 -L 3003:127.0.0.1:3003 playground@192.168.1.217 && xdg-open $web_url"
             echo "(the desktop 'decep web' does this - and checks it's up first.) The UI only"
-            echo "listens after you bring the stack up in 'decep cli' and spawn it with '/web'." ;;
+            echo "listens after you bring the stack up and spawn it with '/web'." ;;
           logs)
             need_checkout
             ( cd "$dir" && docker compose logs -f ) ;;
-          logs-launcher)
-            # The launcher's own output (onboarding, engagement picker, its
-            # startup orchestration) - NOT container logs. See 'up' above for
-            # why this is teed to a file instead of only living in the pane.
-            tail -100 ~/decep-launcher.log 2>/dev/null || echo "No launcher log yet - run 'decep up' first." ;;
           onboard)
             # Re-runs the onboard wizard standalone (change API keys/model
             # tiers) via the LOCAL launcher binary make dogfood builds - there
@@ -211,11 +177,10 @@
             if [ -d "$dir" ]; then
               ( cd "$dir" && docker compose down ) || true
             fi
-            tmux kill-session -t "$session" 2>/dev/null || true
             htb down || true
             echo "Decepticon: stopped (data volumes preserved), VPN down." ;;
           *)
-            echo "usage: decep {up|cli|status|web|logs|logs-launcher|onboard|down}"; exit 1 ;;
+            echo "usage: decep {up|status|web|logs|onboard|down}"; exit 1 ;;
         esac
       '';
     })
