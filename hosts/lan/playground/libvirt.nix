@@ -1,16 +1,14 @@
 # hosts/lan/playground/libvirt.nix
 #
-# playground as the libvirt/KVM host for the security lab (Kali, Parrot, REMnux,
-# FlareVM). Host enablement only: libvirtd + TPM 2.0 (swtpm) so the Windows FlareVM
-# can boot. UEFI/OVMF firmware is auto-discovered from QEMU on 25.11 (the old
+# playground as the libvirt/KVM host for the security lab (Kali). Host enablement
+# only. UEFI/OVMF firmware is auto-discovered from QEMU on 25.11 (the old
 # qemu.ovmf option is gone). AMD-V + /dev/kvm are present.
 #
 # Companion modules / state: ./bridge.nix is the br0 bridge that puts guests on the
 # LAN; ./lan-br0.xml is the libvirt network that attaches them to it; ./mal-isolated.xml
-# is an air-gapped host-only network (no uplink/NAT) for malware work (REMnux + a
-# victim VM, no LAN/internet path). The VM domains live as committed XMLs under
-# ./domains/ (Kali/Parrot/REMnux from official images + a manual FlareVM) — see
-# ./domains/README.md for the per-VM build runbook and the network-isolation model.
+# is an air-gapped host-only network (no uplink/NAT) left in place for future malware
+# work (no LAN/internet path). The VM domains live as committed XMLs under ./domains/
+# — see ./domains/README.md for the per-VM build runbook and the isolation model.
 { pkgs, ... }:
 {
   virtualisation.libvirtd = {
@@ -20,7 +18,6 @@
     # or mal-isolated).
     onBoot = "ignore";
     onShutdown = "shutdown";
-    qemu.swtpm.enable = true; # TPM 2.0 - FlareVM (Win11) needs it
   };
 
   # Manage as the `playground` user (virsh against qemu:///system), or remotely
