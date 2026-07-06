@@ -5,7 +5,8 @@
 # off that mount:
 #
 #   /mnt/media/                    (NAS: /srv/media, 916G)
-#   |-- data/nzbget/               # NZBGet working + completed (tv/movies cats)
+#   |-- data/nzbget/               # NZBGet completed (tv/movies cats) + queue/nzbs;
+#   |                              # write-hot inter/tmp dirs are local, see below
 #   `-- Media/                     # TV (Sonarr), Movies (Radarr), Books, etc.
 
 {
@@ -71,15 +72,26 @@
     user = "media";
     group = "users";
     settings = {
-      # reuse the existing download tree on the NAS
+      # completed files, queue state, and nzbs stay on the NAS; the write-hot
+      # intermediate/temp dirs live on the local ext4 root (468G) so download,
+      # par-repair, and unpack don't run over NFS — data crosses the wire once,
+      # at unpack into DestDir
       MainDir = "/mnt/media/data/nzbget";
       DestDir = "/mnt/media/data/nzbget/completed";
-      InterDir = "/mnt/media/data/nzbget/intermediate";
+      InterDir = "/var/lib/nzbget/intermediate";
       NzbDir = "/mnt/media/data/nzbget/nzb";
       QueueDir = "/mnt/media/data/nzbget/queue";
-      TempDir = "/mnt/media/data/nzbget/tmp";
+      TempDir = "/var/lib/nzbget/tmp";
       ControlIP = "0.0.0.0";
       ControlPort = 6789;
+      # throughput: Eweka allows 50 SSL connections; 8 was the bottleneck.
+      # Cache+buffer assemble articles in RAM (box has 16G) instead of small
+      # NFS writes; direct rename/unpack overlap post-processing with download.
+      "Server1.Connections" = 30;
+      ArticleCache = 500;
+      WriteBuffer = 1024;
+      DirectRename = "yes";
+      DirectUnpack = "yes";
       "Category1.Name" = "tv";
       "Category1.DestDir" = "/mnt/media/data/nzbget/completed/tv";
       "Category2.Name" = "movies";
