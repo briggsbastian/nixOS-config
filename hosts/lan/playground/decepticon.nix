@@ -133,7 +133,10 @@
       # default docker 28.x and refuse to build). The Decepticon launcher binary
       # itself is never on PATH - it's built locally by `make`/`make launcher`
       # into the checkout, and referenced here by its full path ($launcher).
-      runtimeInputs = [ tmux ];
+      runtimeInputs = [
+        tmux
+        iproute2
+      ];
       text = ''
         dir=/home/playground/Decepticon
         launcher="$dir/clients/launcher/bin/decepticon"
@@ -174,16 +177,24 @@
             else
               echo "session: none"
             fi
+            if ss -tln 2>/dev/null | grep -q 127.0.0.1:3000; then
+              echo "web: listening on :3000 (reach it with 'decep web')"
+            else
+              echo "web: not up (bring the stack up in 'decep cli', then spawn it with '/web')"
+            fi
             if [ -d "$dir" ]; then
               echo "--- containers ---"
-              ( cd "$dir" && docker compose ps ) || true
+              ( cd "$dir" && DECEPTICON_STACK_NAME="" docker compose ps ) 2>/dev/null || true
             else
               echo "checkout: missing ($dir)"
             fi ;;
           web)
-            echo "Web dashboard is localhost-only on playground. From your workstation:"
-            echo "  ssh -fNT -L 3000:127.0.0.1:3000 playground@192.168.1.217 && xdg-open $web_url"
-            echo "(the desktop 'decep web' does this for you.)" ;;
+            echo "Decepticon's web UI is localhost-only: page on :3000, terminal panel on"
+            echo "ws://localhost:3003 - so reach it from a machine with a browser, with BOTH"
+            echo "ports tunnelled to this VM's localhost. From your workstation:"
+            echo "  ssh -fNT -L 3000:127.0.0.1:3000 -L 3003:127.0.0.1:3003 playground@192.168.1.217 && xdg-open $web_url"
+            echo "(the desktop 'decep web' does this - and checks it's up first.) The UI only"
+            echo "listens after you bring the stack up in 'decep cli' and spawn it with '/web'." ;;
           logs)
             need_checkout
             ( cd "$dir" && docker compose logs -f ) ;;
