@@ -11,6 +11,14 @@
     nixvim = {
       url = "github:nix-community/nixvim";
     };
+    # nixvim's main branch needs a newer nixpkgs (neovimUtils API nixos-25.11
+    # doesn't have) - it maintains release branches matching nixpkgs channels
+    # for exactly this. Used only by playground (nixpkgs-stable); desktop
+    # keeps using the plain `nixvim` input above, matching its unstable nixpkgs.
+    nixvim-stable = {
+      url = "github:nix-community/nixvim/nixos-25.11";
+      inputs.nixpkgs.follows = "nixpkgs-stable";
+    };
     claude-code = {
       url = "github:sadjow/claude-code-nix";
     };

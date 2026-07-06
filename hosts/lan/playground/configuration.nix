@@ -27,6 +27,7 @@
     ./cockpit.nix
     ./decepticon.nix
     ./shell.nix
+    ./neovim.nix
   ];
 
   boot.loader.systemd-boot.enable = true;
