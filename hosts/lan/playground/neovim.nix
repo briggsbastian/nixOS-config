@@ -4,19 +4,14 @@
 # ported system-wide via nixvim's NixOS module instead of the home-manager one -
 # playground has no home-manager, and this box only has the one interactive user
 # anyway. Config is duplicated rather than shared: desktop runs unstable nixpkgs,
-# playground runs nixpkgs-stable (25.11), and home-manager vs NixOS module wrappers
+# playground runs nixpkgs-stable, and home-manager vs NixOS module wrappers
 # aren't quite the same option surface, so a cross-cutting shared module would
 # couple two things that are fine to drift independently.
 #
-# Uses `inputs.nixvim-stable` (nixvim's own nixos-25.11 branch, see flake.nix),
-# NOT the plain `nixvim` input the desktop uses - nixvim's main branch needs a
-# newer nixpkgs (neovimUtils API 25.11 doesn't have) and errors immediately
-# against nixpkgs-stable. `opencode` also isn't in 25.11 yet, so it's pulled
-# from `inputs.nixpkgs` like cockpit.nix does.
+# Uses `inputs.nixvim-stable` (nixvim's release branch matching nixpkgs-stable,
+# see flake.nix), NOT the plain `nixvim` input the desktop uses - nixvim's main
+# branch tracks unstable nixpkgs and errors against stable.
 { pkgs, inputs, ... }:
-let
-  unstable = import inputs.nixpkgs { inherit (pkgs.stdenv.hostPlatform) system; };
-in
 {
   imports = [ inputs.nixvim-stable.nixosModules.nixvim ];
   programs.nixvim = {
@@ -150,7 +145,7 @@ in
       })
     '';
 
-    extraPackages = [ unstable.opencode ];
+    extraPackages = [ pkgs.opencode ];
     extraPlugins = [
       # pairs with tmuxPlugins.vim-tmux-navigator in tmux.nix: Ctrl-hjkl moves
       # seamlessly between tmux panes and nvim splits. Sets its own <C-h/j/k/l>

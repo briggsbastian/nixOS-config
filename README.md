@@ -4,7 +4,7 @@ One flake for my homelab: a desktop plus five servers, all NixOS. Servers are
 deployed over SSH with [Colmena](https://github.com/zhaofengli/colmena) from the
 desktop. Secrets are [sops-nix](https://github.com/Mic92/sops-nix), and each host
 decrypts its own with its SSH host key. The desktop runs nixpkgs unstable; the
-servers stay on stable (nixos-25.11).
+servers stay on stable (nixos-26.05).
 
 ## Hosts
 

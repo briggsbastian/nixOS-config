@@ -74,12 +74,11 @@
 { pkgs, ... }:
 
 {
-  # Rootful Docker + Compose. Mirrors mgmt's block (hosts/lan/mgmt/modules/base.nix):
-  # docker_29 because the default docker 28.x is flagged insecure on nixos-25.11,
-  # and autoPrune so the sandbox's throwaway images/containers don't fill the NVMe.
+  # Rootful Docker + Compose. Default docker on nixos-26.05 is 29.x (the 25.11
+  # default 28.x was flagged insecure, which used to force a docker_29 pin here);
+  # autoPrune so the sandbox's throwaway images/containers don't fill the NVMe.
   virtualisation.docker = {
     enable = true;
-    package = pkgs.docker_29;
     autoPrune.enable = true;
   };
 
@@ -91,7 +90,7 @@
   # Build/run toolchain for the source checkout + optional packaged CLI.
   # git/curl are already in common.nix; gnumake drives upstream's `make dogfood`;
   # go builds the Go launcher binary that `make dogfood`/`make launcher` produces
-  # at clients/launcher/bin/decepticon (go.mod pins 1.25.8 - pkgs.go on 25.11 is
+  # at clients/launcher/bin/decepticon (go.mod pins 1.25.8 - pkgs.go on stable is
   # newer, which satisfies it); gcc because the launcher pulls in a cgo dependency
   # (clipboard access) and fails to link without a C compiler on PATH; docker-compose
   # is the v2 CLI Decepticon shells out to; python3 + pipx cover `pipx install
@@ -109,14 +108,15 @@
     gcc
     docker-compose
     python3
-    pipx
+    # pipx 1.8.0's test suite fails on nixos-26.05 (packaging-lib spacing change
+    # breaks 7 specifier tests); the package itself is fine, so skip the tests.
+    (pipx.overridePythonAttrs (o: { doCheck = false; }))
     (writeShellApplication {
       name = "decep";
-      # `docker`/`make`/`go`/`htb` come from the system PATH (the host runs
-      # docker_29 - pulling pkgs.docker here would drag in the insecure default
-      # docker 28.x and refuse to build). The Decepticon launcher binary itself
-      # is never on PATH - it's built locally by `make`/`make launcher` into the
-      # checkout, and referenced here by its full path ($launcher).
+      # `docker`/`make`/`go`/`htb` come from the system PATH. The Decepticon
+      # launcher binary itself is never on PATH - it's built locally by
+      # `make`/`make launcher` into the checkout, and referenced here by its
+      # full path ($launcher).
       runtimeInputs = [ iproute2 ];
       text = ''
         dir=/home/playground/Decepticon

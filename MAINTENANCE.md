@@ -39,7 +39,7 @@ a normal apply should show no service restarts.
 ## Updates
 
 Three nixpkgs inputs, on purpose: `nixpkgs` (unstable) for the desktop,
-`nixpkgs-stable` (nixos-25.11) for the servers, `nixpkgs-mgmt` (pinned) for mgmt.
+`nixpkgs-stable` (nixos-26.05) for the servers, `nixpkgs-mgmt` (pinned) for mgmt.
 
 ```sh
 nix flake update nixpkgs-stable   # bump the servers' channel

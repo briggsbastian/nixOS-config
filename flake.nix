@@ -11,20 +11,22 @@
     nixvim = {
       url = "github:nix-community/nixvim";
     };
-    # nixvim's main branch needs a newer nixpkgs (neovimUtils API nixos-25.11
-    # doesn't have) - it maintains release branches matching nixpkgs channels
-    # for exactly this. Used only by playground (nixpkgs-stable); desktop
-    # keeps using the plain `nixvim` input above, matching its unstable nixpkgs.
+    # nixvim's main branch tracks unstable nixpkgs - it maintains release
+    # branches matching nixpkgs channels for exactly this. Used only by
+    # playground (nixpkgs-stable); desktop keeps using the plain `nixvim`
+    # input above, matching its unstable nixpkgs.
     nixvim-stable = {
-      url = "github:nix-community/nixvim/nixos-25.11";
+      url = "github:nix-community/nixvim/nixos-26.05";
       inputs.nixpkgs.follows = "nixpkgs-stable";
     };
     claude-code = {
       url = "github:sadjow/claude-code-nix";
     };
+    # claude-desktop keeps its OWN nixpkgs pin (no follows): upstream is
+    # unmaintained (last commit Nov 2025) and still uses `nodePackages`,
+    # which nixpkgs removed in 26.05 - following our nixpkgs breaks its eval.
     claude-desktop = {
       url = "github:k3d3/claude-desktop-linux-flake";
-      inputs.nixpkgs.follows = "nixpkgs-stable";
     };
     colmena = {
       url = "github:zhaofengli/colmena";
@@ -46,16 +48,15 @@
       url = "github:nix-community/disko";
       inputs.nixpkgs.follows = "nixpkgs-stable";
     };
-    # desktop tracks nixpkgs (unstable); servers track stable (nixos-25.11,
-    # what the boxes already run, so zero version churn).
-    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-25.11";
+    # desktop tracks nixpkgs (unstable); servers track stable (nixos-26.05).
+    nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
     # mgmt pinned to the exact nixpkgs rev it already runs, so the first Colmena
     # cutover is a no-op (no package churn -> no DNS/PKI/SIEM restarts). bump
     # this deliberately, later.
     nixpkgs-mgmt.url = "github:NixOS/nixpkgs/755f5aa91337890c432639c60b6064bb7fe67769";
     # The morning newspaper app, fetched from Forgejo over SSH. follows
     # nixpkgs-stable so it adds no extra nixpkgs to the lock; the app builds
-    # against stable (25.11), independent of mgmt's deliberately-stale pin.
+    # against stable, independent of mgmt's deliberately-stale pin.
     newspaper = {
       url = "git+ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git?ref=main";
       inputs.nixpkgs.follows = "nixpkgs-stable";
@@ -184,13 +185,13 @@
         };
       };
 
-      # Servers build against stable nixpkgs (nixos-25.11), matching the boxes'
-      # current versions, so zero version churn. The desktop stays on unstable.
+      # Servers build against stable nixpkgs (nixos-26.05). The desktop stays
+      # on unstable.
       mkServerSystem =
         name: meta:
         nixpkgs-stable.lib.nixosSystem {
           system = "x86_64-linux";
-          specialArgs = { inherit inputs; }; # lets a host module reach another input (e.g. playground pulls cockpit-machines from unstable)
+          specialArgs = { inherit inputs; }; # lets a host module reach another input (e.g. playground's nixvim-stable + claude-code)
           modules = serverModules name meta;
         };
 
