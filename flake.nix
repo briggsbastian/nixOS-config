@@ -50,10 +50,10 @@
     };
     # desktop tracks nixpkgs (unstable); servers track stable (nixos-26.05).
     nixpkgs-stable.url = "github:NixOS/nixpkgs/nixos-26.05";
-    # mgmt pinned to the exact nixpkgs rev it already runs, so the first Colmena
-    # cutover is a no-op (no package churn -> no DNS/PKI/SIEM restarts). bump
-    # this deliberately, later.
-    nixpkgs-mgmt.url = "github:NixOS/nixpkgs/755f5aa91337890c432639c60b6064bb7fe67769";
+    # mgmt pinned to an exact nixpkgs rev, bumped deliberately in maintenance
+    # windows (a bad deploy takes down the house's DNS/PKI). Currently the same
+    # nixos-26.05 rev as nixpkgs-stable, proven on the other servers first.
+    nixpkgs-mgmt.url = "github:NixOS/nixpkgs/8f0500b9660505dc3cb647775fe9a978a74b5283";
     # The morning newspaper app, fetched from Forgejo over SSH. follows
     # nixpkgs-stable so it adds no extra nixpkgs to the lock; the app builds
     # against stable, independent of mgmt's deliberately-stale pin.

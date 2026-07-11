@@ -284,6 +284,13 @@ in
 
   services.grafana = {
     enable = true;
+    # Grafana 13 (nixos-26.05) dropped the module's implicit secret_key default;
+    # unset, existing DB secrets become undecryptable. This IS that old default
+    # (public knowledge, upstream's fallback) - it's what this instance has been
+    # encrypting with all along, pinned now for a behavior-preserving upgrade.
+    # To actually secure it: put a fresh key in secrets/mgmt.yaml and point this
+    # at it with $__file{...}, accepting that old encrypted DB values are lost.
+    settings.security.secret_key = "SW2YcwTIb9zpOOhoPsMm";
     settings.server = {
       http_addr = "127.0.0.1";
       http_port = 3002;

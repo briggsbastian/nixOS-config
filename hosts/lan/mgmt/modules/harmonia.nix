@@ -6,7 +6,8 @@
 { pkgs, ... }:
 
 {
-  services.harmonia = {
+  # harmonia 3.x (nixos-26.05) moved the module to services.harmonia.cache.*
+  services.harmonia.cache = {
     enable = true;
     signKeyPaths = [ "/var/lib/mgmt-secrets/harmonia.secret" ];
     settings.bind = "127.0.0.1:5000";

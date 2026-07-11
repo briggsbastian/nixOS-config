@@ -4,6 +4,13 @@
 { pkgs, ... }:
 
 {
+  # TODO(netbox-4.5): 26.05 flags netbox 4.4 insecure, but 4.5 is a one-way DB
+  # migration AND requires services.netbox.apiTokenPeppersFile (new assertion).
+  # Deferred to its own window: back up the netbox postgres DB, add a pepper
+  # secret to secrets/mgmt.yaml, set package = pkgs.netbox_4_5, drop this allow.
+  # LAN-only exposure behind nginx in the meantime.
+  nixpkgs.config.permittedInsecurePackages = [ "netbox-4.4.10" ];
+
   services.netbox = {
     enable = true;
     listenAddress = "127.0.0.1";

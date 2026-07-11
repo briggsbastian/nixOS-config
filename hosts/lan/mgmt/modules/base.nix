@@ -35,8 +35,8 @@
 
   virtualisation.docker = {
     enable = true;
-    # default docker 28.x is flagged insecure in nixos-25.11
-    package = pkgs.docker_29;
+    # default docker on nixos-26.05 is 29.x (25.11's 28.x default was flagged
+    # insecure, which used to force a docker_29 pin here)
     autoPrune.enable = true;
   };
 
