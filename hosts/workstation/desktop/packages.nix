@@ -31,6 +31,7 @@
     proton-pass
     proton-vpn
     eddie
+    reaper
     vlc
     spotify
     blender
@@ -64,8 +65,6 @@
 
   programs.firefox = {
     enable = true;
-    # Firefox has its own trust store; import enterprise roots so it trusts
-    # mgmt's step-ca root (added system-wide in modules/internal-ca.nix).
     policies.Certificates.ImportEnterpriseRoots = true;
   };
 

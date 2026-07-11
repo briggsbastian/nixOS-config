@@ -66,14 +66,38 @@
 # (playground already decrypts its own secrets - see .sops.yaml) and source the
 # rendered file into the environment before `decep up`.
 #
-# NETWORKING: the stack binds its service/UI ports itself via Compose. They are
-# deliberately left OFF the host firewall here - reach them from your workstation
-# over an SSH tunnel (`ssh -L ...`) or via the existing Guacamole gateway, rather
-# than exposing Postgres/Neo4j/LiteLLM to the LAN. Open a specific port in
-# ./configuration.nix's networking.firewall.allowedTCPPorts only if you need it.
-{ pkgs, ... }:
+# NETWORKING: most service ports (Postgres, Neo4j, LiteLLM, LangGraph) are
+# Compose-bound to 127.0.0.1 and deliberately left OFF the host firewall -
+# reach them over an SSH tunnel if you ever need to.
+#
+# The web dashboard (3000 + its terminal websocket, 3003) is the one
+# exception: it's bound to the LAN interface below and its ports are opened
+# in the firewall, so it's reachable directly at http://192.168.1.217:3000/web
+# from any LAN device - no SSH tunnel needed. This is a conscious risk
+# accepted for this trusted home LAN, NOT upstream's default posture:
+# Decepticon's own threat model (docs/security/decepticon-threat-model.md)
+# states the dashboard ships with NO authentication and that exposing it
+# grants "full agent control" (PR #338) to whoever can reach it - upstream's
+# compose file binds it to 127.0.0.1 for exactly that reason. Revert to a
+# tunnel (or put it behind an authed reverse proxy) if the LAN's trust
+# model ever changes (guests, IoT, compromised devices, etc.).
+#
+# The LAN bind itself lives in the checkout's docker-compose.yml (imperative,
+# not Nix-managed - see the onboarding note above): the `web` service's
+# `ports:` were changed from `127.0.0.1:...` to `0.0.0.0:...` for both 3000
+# and 3003. A future `git pull` on the checkout could revert that edit -
+# recheck it if the dashboard mysteriously goes LAN-unreachable again.
+{ pkgs, inputs, ... }:
 
 {
+  # Web dashboard + its terminal websocket - see the NETWORKING note above for
+  # why this is the one Decepticon port pair opened to the LAN (no auth
+  # upstream; everything else stays tunnel-only).
+  networking.firewall.allowedTCPPorts = [
+    3000
+    3003
+  ];
+
   # Rootful Docker + Compose. Default docker on nixos-26.05 is 29.x (the 25.11
   # default 28.x was flagged insecure, which used to force a docker_29 pin here);
   # autoPrune so the sandbox's throwaway images/containers don't fill the NVMe.
@@ -110,7 +134,16 @@
     python3
     # pipx 1.8.0's test suite fails on nixos-26.05 (packaging-lib spacing change
     # breaks 7 specifier tests); the package itself is fine, so skip the tests.
-    (pipx.overridePythonAttrs (o: { doCheck = false; }))
+    (pipx.overridePythonAttrs (o: {
+      doCheck = false;
+    }))
+    # The onboard wizard defaults DECEPTICON_AUTH_PRIORITY to anthropic_oauth
+    # with DECEPTICON_AUTH_CLAUDE_CODE=true, which routes Anthropic model
+    # calls through this CLI's OAuth token (~/.claude/.credentials.json)
+    # instead of a raw API key. Log in once as the playground user (`claude`,
+    # then complete the browser OAuth flow) to populate that file - LiteLLM
+    # mounts and reads it directly, no key needed in .env.
+    inputs.claude-code.packages.${pkgs.stdenv.hostPlatform.system}.claude-code
     (writeShellApplication {
       name = "decep";
       # `docker`/`make`/`go`/`htb` come from the system PATH. The Decepticon
