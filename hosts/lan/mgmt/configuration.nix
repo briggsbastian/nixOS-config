@@ -17,6 +17,7 @@
     ./modules/snipe-it.nix
     ./modules/backup.nix
     ./modules/newspaper.nix
+    ./modules/launchpad.nix
   ];
 
   boot.loader.grub.enable = true;
