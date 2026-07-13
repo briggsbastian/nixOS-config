@@ -82,6 +82,12 @@
       NzbDir = "/mnt/media/data/nzbget/nzb";
       QueueDir = "/mnt/media/data/nzbget/queue";
       TempDir = "/var/lib/nzbget/tmp";
+      # stale ScriptDir=/home/media/downloads/scripts persisted in
+      # /var/lib/nzbget/nzbget.conf from before the NAS layout migration;
+      # undeclared settings aren't overridden by the nixos module, and
+      # ProtectHome (media-hardening.nix) hides /home from the sandboxed
+      # service, so nzbget got Permission denied instead of just missing it
+      ScriptDir = "/var/lib/nzbget/scripts";
       ControlIP = "0.0.0.0";
       ControlPort = 6789;
       # throughput: Eweka allows 50 SSL connections; 8 was the bottleneck.
