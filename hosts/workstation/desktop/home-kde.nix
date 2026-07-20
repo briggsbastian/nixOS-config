@@ -9,6 +9,7 @@
     ./dotfiles/git.nix
     ./dotfiles/alacritty.nix
     ./dotfiles/tmux.nix
+    ./dotfiles/nixpkgs-overlays.nix
   ];
   home.stateVersion = "25.11";
   home.username = "briggs";
