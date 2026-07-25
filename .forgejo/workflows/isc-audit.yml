@@ -34,8 +34,28 @@ jobs:
         with:
           fetch-depth: 0
 
+      # Observed state has to outlive the runner. first_seen is not re-derivable
+      # from the present, so without this every run starts from zero: age is
+      # always "today" and `regressed` can never fire. ADR 0008.
+      - name: restore finding history
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          git fetch -q origin isc-state:isc-state 2>/dev/null || {
+            echo "no isc-state branch yet; starting fresh"; exit 0; }
+          git show isc-state:state.json > /tmp/isc-state.json 2>/dev/null || true
+          [ -s /tmp/isc-state.json ] && nix run .#isc -- state --import /tmp/isc-state.json
+
       - name: report what the audit sees
         run: nix run .#isc -- --repo . audit
+
+      - name: collect alerts
+        # Reachable because internal-ca.nix pins alerts.mgmt.lan and nginx on
+        # mgmt fronts Alertmanager. No ssh, no second home for isc.
+        run: nix run .#isc -- --repo . collect --source alertmanager --alertmanager https://alerts.mgmt.lan || true
 
       # Separate step so the report above is always visible even when this one
       # opens nothing, or fails.
@@ -49,3 +69,25 @@ jobs:
           # --max-prs is a deliberate cap. If the audit ever finds twenty things,
           # twenty pull requests is not help, it is a denial of review.
           nix run .#isc -- --repo . audit --pr --max-prs 3 --base main
+
+      # Always runs, so a failure above still records what was observed.
+      - name: persist finding history
+        if: always()
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          nix run .#isc -- state --export /tmp/isc-state.json
+          tmp=$(mktemp -d)
+          git -C "$tmp" init -q
+          git -C "$tmp" config user.name "forgejo-actions[bot]"
+          git -C "$tmp" config user.email "actions@git.mgmt.lan"
+          cp /tmp/isc-state.json "$tmp/state.json"
+          git -C "$tmp" add state.json
+          git -C "$tmp" commit -qm "isc: observed state $(date -u +%Y-%m-%dT%H:%MZ)"
+          # Orphan branch, force-pushed: this is a snapshot, and its git history
+          # is the audit trail. Kept off main so it never clutters review.
+          git -C "$tmp" -c http.extraheader="Authorization: token ${TOKEN}" \
+            push -f "${SERVER}/${REPO}.git" "HEAD:isc-state"
