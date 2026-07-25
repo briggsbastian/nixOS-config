@@ -10,9 +10,36 @@
 # Alerts (eve.json, event_type=alert) get tailed into the existing Loki by
 # alcove.siemLite.agent.extraConfig, then a LogQL rule below routes them
 # through the same Alertmanager -> ntfy pipeline as SSHBruteForce/SudoFailure.
-{ options, pkgs, ... }:
+{
+  config,
+  options,
+  pkgs,
+  ...
+}:
 
 {
+  # Changing the ruleset does not change the running engine.
+  #
+  # suricata.service has no ExecReload, and switch-to-configuration only
+  # restarts a unit whose own definition changed. Editing enabledSources or
+  # disabledRules changes neither - it changes what suricata-update writes to
+  # /var/lib/suricata/rules/suricata.rules. So the deploy regenerates the rules
+  # on disk, systemd leaves the running engine alone, and it keeps matching on
+  # the ruleset it loaded at boot.
+  #
+  # Measured on the deploy that trimmed the sources: rules regenerated at
+  # 13:45:29 with sid 2200121 correctly commented out, and the engine was still
+  # emitting 2200121 alerts at 13:46:34 from the copy in memory. Every check
+  # said the change had landed. Nothing had changed.
+  #
+  # restartTriggers ties the unit to the values that decide its ruleset, so a
+  # ruleset change restarts the engine as part of the deploy - ordering already
+  # holds, since suricata is After=suricata-update.
+  systemd.services.suricata.restartTriggers = [
+    (builtins.toJSON config.services.suricata.enabledSources)
+    (builtins.toJSON config.services.suricata.disabledRules)
+  ];
+
   # `enabledSources` is not authoritative on its own, and silently so.
   #
   # suricata-update keeps its enabled sources as one yaml per source under
