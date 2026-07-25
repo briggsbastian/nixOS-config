@@ -38,9 +38,14 @@ in
         # binary cache pubkey for client configs
         locations."= /pubkey".alias = "/var/lib/mgmt-public/harmonia.pub";
       };
-      "netbox.mgmt.lan" = proxy "http://127.0.0.1:8001" {
-        locations."/static/".alias = "/var/lib/netbox/static/";
-      };
+      # Retired together with netbox.nix's import (see configuration.nix). Left
+      # in place it proxied to a port nothing listens on, so certProbeTargets -
+      # derived from every enableACME vhost - kept probing it and TlsProbeDown
+      # fired continuously. Restore this in the same change that re-enables the
+      # service, not before.
+      # "netbox.mgmt.lan" = proxy "http://127.0.0.1:8001" {
+      #   locations."/static/".alias = "/var/lib/netbox/static/";
+      # };
       # alertmanager UI, no auth, LAN-only like the rest
       "alerts.mgmt.lan" = proxy "http://127.0.0.1:9093" { };
       # ntfy long-polls, so bump timeouts and don't buffer
