@@ -16,6 +16,50 @@
   services.suricata = {
     enable = true;
 
+    # The module default enables TEN sources. That was never a deliberate
+    # choice here - the header comment above said "Emerging Threats Open
+    # ruleset (enabledSources default)", which was only ever a third true.
+    #
+    # Trimmed to five on the principle that an alert reaching a phone must be
+    # something a person would act on. Rulesets built to generate *leads for an
+    # analyst to triage* are a different tool, and routing them into the same
+    # ntfy pipeline as NodeDown is how a notification channel becomes noise.
+    #
+    # Kept:
+    #   et/open              the baseline. Broad, curated, actively maintained.
+    #   abuse.ch/sslbl-*     small, high-signal C2/JA3 certificate intel. Almost
+    #                        never fires; when it does, it means something.
+    #   stamus/lateral       lateral movement. The most relevant source on this
+    #                        estate, given playground runs Kali and a live HTB
+    #                        VPN on the same flat segment as everything else.
+    #
+    # Dropped:
+    #   pawpatrules          rates the gateway doing mDNS as severity 1, with
+    #                        emoji, category "Potential Corporate Privacy
+    #                        Violation". Only 6 of 680 observed alerts, but it
+    #                        was the ONLY source producing severity 1 - so it
+    #                        actively corrupts severity-based triage. Measured:
+    #                        every high-severity alert on this network was
+    #                        pawpatrules calling multicast DNS an incident.
+    #   tgreen/hunting       hunting rules are designed to surface leads, not to
+    #                        page. Wrong end of the funnel for this pipeline.
+    #   etnetera/aggressive  aggressive IP blocklist; high false-positive rate
+    #                        by name and design, and overlaps abuse.ch.
+    #   oisf/trafficid       identifies applications and TLS fingerprints. Alerts
+    #                        on normal traffic by design - informational.
+    #   ptrules/open         decent quality, but adds volume on top of et/open
+    #                        without covering anything this estate needs.
+    #
+    # This trim removes ~1% of observed alert volume. It is about signal
+    # quality, not volume - the volume problem is sid 2200121, handled below.
+    enabledSources = [
+      "et/open"
+      "abuse.ch/sslbl-blacklist"
+      "abuse.ch/sslbl-c2"
+      "abuse.ch/sslbl-ja3"
+      "stamus/lateral"
+    ];
+
     # Ten ICS signatures kept the whole IDS down from 2026-07-17 to 2026-07-25.
     #
     # ExecStartPre runs `suricata -T`, and -T treats a rule that fails to parse
