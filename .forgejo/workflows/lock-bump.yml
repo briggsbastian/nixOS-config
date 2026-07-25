@@ -162,8 +162,14 @@ jobs:
       - name: scan main, then the bump branch
         run: |
           set -eu
-          base=$(git rev-parse main)
+          # origin/main, not main. actions/checkout checks out a single ref, so
+          # there is no local branch named main unless main is what got checked
+          # out - and on a workflow_dispatch against any other branch there is
+          # not. `git rev-parse main` then fails and set -eu kills the step.
+          base=$(git rev-parse origin/main)
           head=$(git rev-parse origin/automated/flake-lock-bump)
+          echo "base $base"
+          echo "head $head"
           echo "base=$base" >> "$GITHUB_ENV"
           echo "head=$head" >> "$GITHUB_ENV"
 
