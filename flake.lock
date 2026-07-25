@@ -261,12 +261,12 @@
         "rev": "fb5b22414528aee728b7332b8cde52e48fb537da",
         "revCount": 2,
         "type": "git",
-        "url": "ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git"
+        "url": "https://git.mgmt.lan/briggs/newspaper.git"
       },
       "original": {
         "ref": "main",
         "type": "git",
-        "url": "ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git"
+        "url": "https://git.mgmt.lan/briggs/newspaper.git"
       }
     },
     "nix-flatpak": {

@@ -58,7 +58,20 @@
     # nixpkgs-stable so it adds no extra nixpkgs to the lock; the app builds
     # against stable, independent of mgmt's deliberately-stale pin.
     newspaper = {
-      url = "git+ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git?ref=main";
+      # https, not ssh. nix fetches flake inputs as its own user, and the CI
+      # runner has no Forgejo SSH identity - so this input has NEVER actually
+      # been fetched in CI. It resolved only because its source happened to
+      # already be in hacktop's nix store from an earlier build, and hacktop
+      # garbage-collects weekly. mgmt's build would eventually have broken for a
+      # reason nobody would connect to garbage collection.
+      #
+      # The repo is public and hosts trust the internal CA (modules/internal-ca.nix),
+      # so this needs no credentials anywhere. Same change isc got in #10.
+      #
+      # Side effect, and a wanted one: lock-bump.yml derives its update list by
+      # excluding ssh:// inputs, so newspaper starts being auto-bumped again -
+      # it has silently not been since it was added in June.
+      url = "git+https://git.mgmt.lan/briggs/newspaper.git?ref=main";
       inputs.nixpkgs.follows = "nixpkgs-stable";
     };
     # Infrastructure Security Controller: scans each host's closure for known
