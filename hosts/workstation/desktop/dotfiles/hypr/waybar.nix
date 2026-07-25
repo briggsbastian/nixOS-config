@@ -71,14 +71,22 @@ in
     temperature = {
       critical-threshold = 85;
       format = "{icon} {temperatureC}°C";
-      format-icons = [ "" "" "" ];
+      format-icons = [
+        ""
+        ""
+        ""
+      ];
     };
 
     pulseaudio = {
       format = "{icon} {volume}%";
       format-muted = " muted";
       format-icons = {
-        default = [ "" "" "" ];
+        default = [
+          ""
+          ""
+          ""
+        ];
       };
       on-click = "pavucontrol";
     };

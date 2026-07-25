@@ -1,7 +1,7 @@
 # Alacritty, recolored for the rice. Separate from ../alacritty.nix (the
 # shared gruvbox config the KDE home file uses) since home-manager options
 # can't have two modules disagree on the same settings keys.
-{ ... }:
+_:
 let
   c = import ./colors.nix;
 in

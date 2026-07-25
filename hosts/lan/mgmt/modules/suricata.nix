@@ -10,7 +10,7 @@
 # Alerts (eve.json, event_type=alert) get tailed into the existing Loki by
 # alcove.siemLite.agent.extraConfig, then a LogQL rule below routes them
 # through the same Alertmanager -> ntfy pipeline as SSHBruteForce/SudoFailure.
-{ ... }:
+_:
 
 {
   services.suricata = {
