@@ -227,6 +227,27 @@
         "type": "github"
       }
     },
+    "isc": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-stable"
+        ]
+      },
+      "locked": {
+        "lastModified": 1784991832,
+        "narHash": "sha256-O98i92OM0q/YMWDadYCQV6SHi+/umJ04NZelhVlSrxU=",
+        "ref": "main",
+        "rev": "d6e28b9b7e21188b9a3e705f0838c80633f2bb03",
+        "revCount": 9,
+        "type": "git",
+        "url": "https://git.mgmt.lan/briggs/isc.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "https://git.mgmt.lan/briggs/isc.git"
+      }
+    },
     "newspaper": {
       "inputs": {
         "nixpkgs": [
@@ -452,6 +473,7 @@
         "colmena": "colmena",
         "disko": "disko",
         "home-manager": "home-manager",
+        "isc": "isc",
         "newspaper": "newspaper",
         "nix-flatpak": "nix-flatpak",
         "nix-minecraft": "nix-minecraft",
