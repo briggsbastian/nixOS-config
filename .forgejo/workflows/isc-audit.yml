@@ -1,0 +1,51 @@
+# Scheduled configuration audit.
+#
+# lock-bump.yml handles vulnerability remediation: it bumps flake.lock weekly and
+# isc comments what the bump closes. This is the other half - assertions about the
+# configuration itself, of the form "is this still true across every host". That
+# class is what actually went wrong on this estate repeatedly: mgmt accepted SSH
+# passwords for months because it skips common.nix and nothing compared hosts to
+# each other.
+#
+# Daily rather than weekly, because config drifts on merge, not on a schedule.
+# 06:00 keeps it clear of the 03:30 backup and Monday's 05:00 lock bump.
+#
+# Note what this does NOT collect: Alertmanager. It binds 127.0.0.1 on mgmt and
+# the runner has no ssh identity there, so `isc collect --via` cannot work from
+# CI. Alert-lifecycle collection needs isc to have a home on mgmt - the
+# unresolved half of ADR 0006. Config assertions need nothing but the flake, so
+# they run here today.
+name: isc-audit
+
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: isc-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: nix
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: report what the audit sees
+        run: nix run .#isc -- --repo . audit
+
+      # Separate step so the report above is always visible even when this one
+      # opens nothing, or fails.
+      - name: propose fixes for findings that are safe to generate
+        env:
+          FORGEJO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eu
+          git config user.name "forgejo-actions[bot]"
+          git config user.email "actions@git.mgmt.lan"
+          # --max-prs is a deliberate cap. If the audit ever finds twenty things,
+          # twenty pull requests is not help, it is a denial of review.
+          nix run .#isc -- --repo . audit --pr --max-prs 3 --base main
