@@ -1,16 +1,15 @@
 # hosts/lan/playground/configuration.nix
 #
-# playground - AMD box / NVMe 465G. Security lab host: the libvirt/KVM host for the
-# Kali lab (see ./libvirt.nix) + Guacamole remote-desktop gateway + HTB VPN
-# connectivity (./htb.nix). Adopted from the channel install; baseline (key-only
-# SSH, nftables w/ 22, deploy user, sops, flakes, zsh) is in ../../../modules/common.nix.
+# playground - AMD box / NVMe 465G. Security lab host: Incus VM/container host
+# for the Kali lab (see ./incus.nix, runbook in ./LAB.md) + HTB VPN connectivity
+# (./htb.nix). Adopted from the channel install; baseline (key-only SSH, nftables
+# w/ 22, deploy user, sops, flakes, zsh) is in ../../../modules/common.nix.
 #
-# Guacamole is declarative now (see ./guacamole.nix), replacing the old imperative
-# per-user Tomcat under the removed secvm user. VM connections are NOT auto-discovered
-# from libvirt — add each as a VNC connection in the UI (host `localhost`, port =
-# `5900 + virsh vncdisplay <vm>`); REMnux is built + connected, the rest as you build
-# them. Port 8080 is opened below so it stays reachable once the firewall is on. The
-# lab itself is tracked in "Project 1 - Nixify the Lab".
+# Incus replaced the libvirt + Guacamole + Cockpit trio (2026-07): one web UI on
+# https://192.168.1.217:8443 (TLS client-cert auth, no reverse proxy — see
+# ./incus.nix) with a built-in graphical console, so the Guacamole VNC gateway
+# and Cockpit's VM plugin are gone. The lab itself is tracked in
+# "Project 1 - Nixify the Lab".
 {
   config,
   pkgs,
@@ -21,10 +20,8 @@
 {
   imports = [
     ./hardware-configuration.nix
-    ./libvirt.nix
+    ./incus.nix
     ./bridge.nix
-    ./guacamole.nix
-    ./cockpit.nix
     ./htb.nix
     ./decepticon.nix
     ./shell.nix
@@ -42,7 +39,7 @@
   nixpkgs.config.allowUnfree = true;
 
   # Headless - GNOME from the original install is stripped. Access is over SSH +
-  # Guacamole (web gateway on :8080).
+  # the Incus web UI (:8443, see ./incus.nix).
 
   # --- User ------------------------------------------------------------------
   # Declarative passwords: with mutableUsers=true, NixOS won't apply
@@ -61,10 +58,6 @@
     # module runs. Change it via the sops secret + redeploy.
     hashedPasswordFile = config.sops.secrets.playground_hashed_password.path;
   };
-
-  # Guacamole web UI (Tomcat :8080) - keep it LAN-reachable now that common.nix
-  # turns the firewall on. Merges with common's [ 22 ].
-  networking.firewall.allowedTCPPorts = [ 8080 ];
 
   # playground user's login/sudo password hash (see users.users.playground).
   sops.secrets.playground_hashed_password = {

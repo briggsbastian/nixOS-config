@@ -93,8 +93,8 @@
         format = "took [$duration]($style) ";
       };
 
-      # always on (not ssh_only) - this box is reached over SSH, console, and
-      # Guacamole, so the prompt should always say where you are
+      # always on (not ssh_only) - this box is reached over SSH and the
+      # console, so the prompt should always say where you are
       hostname = {
         ssh_only = false;
         style = "bold red";

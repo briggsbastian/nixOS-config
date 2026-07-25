@@ -12,7 +12,7 @@
 # So this module declares only the *substrate* - Docker + Compose + the build
 # toolchain - and Decepticon runs from a source checkout on top of it, the same
 # way upstream's `make dogfood` flow expects. Lives on playground because that is
-# the fleet's security-lab host (Kali lab + Guacamole; see ./configuration.nix
+# the fleet's security-lab host (Incus Kali lab; see ./configuration.nix
 # and Project 1). Baseline is in ../../../modules/common.nix. HTB VPN connectivity
 # lives separately in ./htb.nix.
 #
@@ -39,10 +39,11 @@
 #                 # then runs it - onboards (API keys + model tiers) inline on
 #                 # first run, then engagement picker -> compose build/up -> CLI.
 #
-# KNOWN PORT CONFLICTS on THIS host (playground already runs Guacamole's own
-# Postgres, the fleet's node_exporter, and Cockpit) - Decepticon's compose reads
-# these from `.env`/`.dogfood/.env` as overrides, defaults in parens:
-#   POSTGRES_PORT=15432       (default 5432  - collides with Guacamole's DB)
+# KNOWN PORT CONFLICTS on THIS host (playground runs the fleet's node_exporter;
+# Guacamole's Postgres and Cockpit are gone since the Incus migration, but the
+# overrides are kept) - Decepticon's compose reads these from `.env`/
+# `.dogfood/.env` as overrides, defaults in parens:
+#   POSTGRES_PORT=15432       (default 5432  - collided with Guacamole's DB)
 #   LANGGRAPH_PORT=12024      (default 2024  - collides with a host listener)
 #   LITELLM_PORT=14000        (default 4000  - collides with a host listener)
 #   SKILLOGY_REST_PORT=19100  (default 9100  - collides with node_exporter)

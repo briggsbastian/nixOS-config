@@ -1,9 +1,9 @@
 # hosts/lan/playground/bridge.nix
 #
-# br0 - a Linux bridge enslaving the single wired uplink (enp1s0) so libvirt/KVM
+# br0 - a Linux bridge enslaving the single wired uplink (enp1s0) so Incus
 # guests sit on the LAN (their reserved MACs pull their reserved DHCP leases) and
-# the host can still reach them. macvtap is out because Guacamole/guacd runs on
-# this box (macvtap blocks host<->guest). Backend: systemd-networkd.
+# the host can still reach them. macvtap is out because host<->guest traffic is
+# needed (Incus API, HTB routing). Backend: systemd-networkd.
 #
 # Self-contained on purpose: the whole NetworkManager->networkd cutover is this one
 # import. Removing it from configuration.nix reverts to NetworkManager.
@@ -70,8 +70,8 @@ in
 
   # --- Keep bridged guest L2 frames off the host's nftables hooks -------------
   # NixOS only filters INPUT (firewall.filterForward defaults false in 25.11), so
-  # bridged guest traffic + Guacamole work today regardless. Defense in depth for
-  # when filterForward is enabled or a NAT/routed libvirt net is added (which flips
+  # bridged guest traffic works today regardless. Defense in depth for when
+  # filterForward is enabled or a NAT'd/routed guest net is added (which flips
   # br_netfilter call-iptables on). Oneshot so the sysctls also hold during a live
   # `test` activation, not just at boot.
   boot.kernelModules = [ "br_netfilter" ]; # merges with hardware-config's kvm-amd

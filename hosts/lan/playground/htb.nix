@@ -8,7 +8,7 @@
 # (no password prompt, see the scoped sudo rule further down), plus `htb status`
 # / `htb ip` to see the tunnel state. It's on every shell's PATH here, and the
 # desktop aliases it over SSH (hosts/workstation/desktop/dotfiles/zsh.nix), so
-# the same word works from the box, over SSH, or in Cockpit's terminal.
+# the same word works from the box or over SSH.
 #
 # The tunnel terminates on THIS host (no /dev/net/tun in any container/VM here),
 # so anything else on playground that wants HTB-routed traffic - a Kali VM, a
@@ -80,8 +80,8 @@
   # doesn't drop replies from HTB targets.
   networking.firewall.trustedInterfaces = [ "tun0" ];
 
-  # Scoped NOPASSWD sudo so `htb up/down/restart` (and Cockpit's Services page)
-  # toggle the VPN without a password prompt - convenience only. Same tight
+  # Scoped NOPASSWD sudo so `htb up/down/restart` toggles the VPN without a
+  # password prompt - convenience only. Same tight
   # pattern as modules/deploy-user.nix: exact stable binary path + exact args, so
   # this grants toggling THIS one unit and nothing else (not general systemctl).
   # Merges with the deploy user's rules (extraRules is a list).
