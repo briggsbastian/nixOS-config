@@ -43,9 +43,25 @@ jobs:
           # nixpkgs-mgmt is excluded because it is frozen on purpose - mgmt runs
           # the LAN's DNS and PKI, and package churn there is a deliberate,
           # in-a-window decision, never an automated PR.
+          # Two exclusions, both derived from the lock so neither can drift:
+          #
+          #   nixpkgs-mgmt  frozen on purpose. mgmt serves the LAN's DNS and PKI;
+          #                 its churn is an in-a-window decision, never a PR.
+          #   ssh:// inputs the runner has no Forgejo SSH identity, and nix
+          #                 fetches inputs as its own user rather than the
+          #                 workflow's, so updating one fails the job. Today that
+          #                 is only `newspaper`. The real fix is moving it to
+          #                 git+https like `isc`; until then it simply is not
+          #                 auto-bumped, which is the honest behaviour rather
+          #                 than a red pipeline every Monday.
           inputs=$(nix flake metadata --json \
-            | jq -r '.locks.nodes.root.inputs | keys[]' \
-            | grep -vx 'nixpkgs-mgmt' \
+            | jq -r '
+                .locks.nodes as $n
+                | $n.root.inputs
+                | to_entries[]
+                | select(.key != "nixpkgs-mgmt")
+                | select(((($n[.value].locked.url) // "") | startswith("ssh://")) | not)
+                | .key' \
             | tr '\n' ' ')
           echo "updating: $inputs"
           nix flake update $inputs
