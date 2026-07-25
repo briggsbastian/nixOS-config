@@ -38,22 +38,29 @@
   # runtime headroom.
   zramSwap.enable = true;
 
-  # --- Off-LAN: don't use mgmt's binary cache yet ---------------------------
-  # common.nix enables internalCa + its Harmonia cache fleet-wide, both pinned to
-  # 192.168.1.222 - unreachable from the cloud until the WireGuard site-to-site
-  # tunnel exists (Project 4C). Trusting the root CA is harmless, but an
-  # unreachable substituter would stall every nix build, so opt out until then.
-  # (common.nix sets this with lib.mkDefault, so this plain assignment wins.)
-  alcove.internalCa.useCache = false;
+  # --- Project 4C: private path to mgmt over the wg-mc tunnel ---------------
+  # mgmt joined the existing wg-mc overlay as 10.100.0.3 (hosts/lan/mgmt/modules/
+  # wg-cloud1.nix); cloud1 reaches it there, never at its real LAN IP
+  # 192.168.1.222 (that subnet isn't routed over the tunnel - allowedIPs on
+  # both ends pins this to point-to-point 10.100.0.0/24 only).
+  #
+  # Harmonia cache: common.nix's alcove.internalCa.useCache = true default now
+  # applies (this host used to opt out here). Pin the mgmtIp override so
+  # cache.mgmt.lan/ca.mgmt.lan resolve to the tunnel address instead of the
+  # unreachable LAN one; 443 is already LAN-wide open on mgmt (base.nix), no
+  # firewall change needed there.
+  alcove.internalCa.mgmtIp = "10.100.0.3";
 
-  # --- Off-LAN: no node_exporter until there's a private path to mgmt ---------
-  # common.nix enables a node_exporter fleet-wide (modules/metrics.nix), firewalled
-  # so only mgmt (192.168.1.222) can scrape :9100. cloud1 is a PUBLIC VPS with no
-  # private link to mgmt, so even a mgmt-scoped rule can't help here and exposing
-  # the port publicly is unsafe. Stay off until the WireGuard/Headscale mesh
-  # (Project 4C) lands, then flip this true and set cloud1.scrape = true in
-  # fleet-hosts.nix. (Default is true, so this plain assignment opts out.)
-  alcove.metrics.nodeExporter.enable = false;
+  # node_exporter: common.nix's default (enabled) now applies (this host used
+  # to opt out here). Scraped over the tunnel address, not mgmt's real IP -
+  # see alcove.metrics.scraperIp and fleet-hosts.nix's cloud1.scrapeIp.
+  alcove.metrics.scraperIp = "10.100.0.3";
+
+  # Ship this host's journal to mgmt's Loki, same as every other fleet host,
+  # just over the tunnel instead of the LAN. mgmt opens :3100 to this host's
+  # tunnel address specifically (hosts/lan/mgmt/modules/wg-cloud1.nix).
+  alcove.siemLite.agent.enable = true;
+  alcove.siemLite.lokiEndpoint = "http://10.100.0.3:3100/loki/api/v1/push";
 
   # --- Break-glass admin ----------------------------------------------------
   # Colmena deploys as the unprivileged `deploy` user (modules/deploy-user.nix).

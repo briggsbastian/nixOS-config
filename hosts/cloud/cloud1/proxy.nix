@@ -35,9 +35,15 @@
     privateKeyFile = config.sops.secrets.wg_private_key.path;
     peers = [
       {
-        # hacktop - the only peer; nothing else can join the tunnel
+        # hacktop - carries the Minecraft DNAT traffic
         publicKey = "LnThq+lGAjbnT4cdST4cueGX1dv3icEqVZf9EwKiEH8=";
         allowedIPs = [ "10.100.0.2/32" ];
+      }
+      {
+        # mgmt - Project 4C: node_exporter scrape, Loki shipping, Harmonia
+        # cache access. Counterpart: hosts/lan/mgmt/modules/wg-cloud1.nix.
+        publicKey = "XvnCJDH3VfJjIFTH6MqNcOAyAqBOnM/+l8AZISxf+C0=";
+        allowedIPs = [ "10.100.0.3/32" ];
       }
     ];
   };
