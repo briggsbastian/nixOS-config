@@ -100,6 +100,32 @@ ACME validation needs each box to resolve `*.mgmt.lan` itself, so `step-ca.nix` 
 `internal-ca.nix` pin the ACME and cache hostnames to 192.168.1.222 in `/etc/hosts`.
 Don't remove those pins or certs fall back to the untrusted minica self-signed cert.
 
+## Grafana
+
+Grafana's DB encryption key comes from sops (`grafana_secret_key` in
+`secrets/mgmt.yaml`), referenced with Grafana's `$__file{}` provider. It was
+briefly pinned to upstream's old public default during the 26.05 upgrade; see the
+comment in `hosts/lan/mgmt/modules/monitoring.nix` for why that is gone.
+
+**Rotating `secret_key` makes every previously encrypted DB value unreadable.**
+Grafana has no supported in-place rotation, so a rotation means resetting the DB:
+
+```sh
+ssh mgmt
+sudo systemctl stop grafana
+sudo mv /var/lib/grafana/grafana.db /var/lib/grafana/grafana.db.bak-$(date +%F)
+# then deploy, which starts Grafana on a fresh DB and re-provisions from the flake
+```
+
+Nothing of value is lost by this: datasources, dashboards and alert rules are all
+provisioned declaratively from the flake. What *is* lost is anything created
+through the UI — ad-hoc dashboards, users beyond the provisioned admin, API keys.
+
+If `grafana.service` fails with `Datasource provisioning error: data source not
+found`, the on-disk DB is the problem, not the config — that exact failure kept
+mgmt's Grafana down from 2026-07-17 and blocked every `colmena apply --on mgmt`,
+because a failed unit makes activation fail. Reset the DB as above.
+
 ## Health
 
 ```sh
