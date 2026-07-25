@@ -356,7 +356,7 @@ in
                   severity: warning
                 annotations:
                   summary: "{{ $labels.instance }} has a configuration activated but not booted"
-                  description: "{{ $labels.instance }} activated a new configuration more than 24h ago without rebooting - the kernel and initrd in use are still the previous ones."
+                  description: "{{ $labels.instance }} is running a kernel or initrd from an older configuration - any kernel-level fix in the activated system is not actually in effect until it reboots."
 
               - alert: BackupStale
                 expr: |

@@ -65,16 +65,19 @@ in
       path = [ pkgs.coreutils ];
       script = ''
         set -euo pipefail
-        # /run/booted-system is fixed at boot; /run/current-system moves on
-        # activation. They differ when a configuration has been activated but
-        # the kernel/initrd in use are still the previous one - three hosts were
-        # in that state on 2026-07-24 and nothing reported it.
-        booted=$(readlink /run/booted-system 2>/dev/null || echo "")
-        current=$(readlink /run/current-system 2>/dev/null || echo "")
+        # A reboot is only actually REQUIRED when the booted kernel, initrd or
+        # kernel modules differ from the activated ones. Comparing the system
+        # paths themselves (booted != current) is wrong: that is true after any
+        # switch at all, so it would fire on every host after every deploy - an
+        # alert that is always on is not an alert.
         pending=0
-        if [ -n "$booted" ] && [ -n "$current" ] && [ "$booted" != "$current" ]; then
-          pending=1
-        fi
+        for part in kernel initrd kernel-modules; do
+          b=$(readlink "/run/booted-system/$part" 2>/dev/null || echo "")
+          c=$(readlink "/run/current-system/$part" 2>/dev/null || echo "")
+          if [ -n "$b" ] && [ -n "$c" ] && [ "$b" != "$c" ]; then
+            pending=1
+          fi
+        done
 
         tmp=$(mktemp "${cfg.textfileDir}/.nixos_config_revision.XXXXXX")
         {
