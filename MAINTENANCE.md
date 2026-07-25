@@ -135,6 +135,7 @@ push; the hacktop runner advertises `kvm` + `nixos-test`, so it can build them.
 nix flake check --show-trace               # everything (eval + lint + VM tests)
 nix build .#checks.x86_64-linux.mgmt-ca    # step-ca issues a cert + nginx serves TLS
 nix build .#checks.x86_64-linux.log-path   # Alloy ships a journal line into Loki
+nix build .#checks.x86_64-linux.mgmt-backup # the backup writes an archive + its success metric
 nix fmt                                     # nixfmt + statix + deadnix (also a check)
 ```
 
@@ -148,18 +149,42 @@ State that isn't in the repo and would be lost on a reinstall:
 | What | Where | Notes |
 |---|---|---|
 | Media library | NAS 192.168.1.213:/srv/media | Back up the NAS. |
-| mgmt service secrets | `mgmt:/var/lib/mgmt-secrets/` | NetBox/Snipe-IT/cache keys. Auto-backed-up. |
-| step-ca root + intermediate | `mgmt:/var/lib/private/step-ca/` | Lose it and every device re-trusts. Auto-backed-up. |
+| mgmt service secrets | `mgmt:/var/lib/mgmt-secrets/` | NetBox/Snipe-IT/cache keys. Auto-backed-up — **verify, don't assume** (below). |
+| step-ca root + intermediate | `mgmt:/var/lib/private/step-ca/` | Lose it and every device re-trusts. Auto-backed-up — **verify, don't assume** (below). |
 | SSH host keys | `/etc/ssh/ssh_host_*` | The sops identity; keep across re-images. |
 | sops secrets | `secrets/*.yaml` | Safe in git (encrypted). |
 
-`backup.nix` runs daily at 03:30: it streams `/var/lib/{private/step-ca,mgmt-secrets}`
+`backup.nix` runs daily at 03:30: it streams `/var/lib/private/step-ca`,
+`/var/lib/mgmt-secrets` and — when NetBox is enabled — `/var/backup/postgresql`
 through `age` to `192.168.1.213:/srv/media/_backups/mgmt/`, keeping the newest 14.
 Restore on the desktop:
 
 ```sh
 age -d -i ~/.config/sops/age/keys.txt mgmt-state-<ts>.tar.age | sudo tar -C / -xv
 ```
+
+### Confirm the backup is real, not merely scheduled
+
+On 2026-07-24 the table above said "Auto-backed-up" while `mgmt-backup.service`
+had failed every night since it was written and had **never once succeeded**: an
+optional source path (`/var/backup/postgresql`, produced by NetBox, whose import
+is commented out) was handed to `tar` unconditionally, so the run aborted and
+step-ca's only off-box copy was never written. A green timer is not a backup.
+
+```sh
+# did the last run actually produce an archive? this file is written only on success
+ssh deploy@192.168.1.222 cat /var/lib/node-exporter-textfile/mgmt_backup.prom
+ssh deploy@192.168.1.222 sudo ls -la /mnt/nas/_backups/mgmt/
+
+# and can it be restored? worth doing occasionally, on the desktop:
+age -d -i ~/.config/sops/age/keys.txt mgmt-state-<ts>.tar.age | tar -tv | head
+```
+
+`checks.x86_64-linux.mgmt-backup` covers the regression, and the `BackupStale`
+alert reads the metric above. Note that a failed run of the old script still left
+a plausible-looking `mgmt-state-*.tar.age` on the NAS built from a truncated tar
+stream — treat any archive dated before 2026-07-24 as unverified until you have
+listed it with the command above.
 
 Loki's data (`mgmt:/var/lib/loki`) isn't backed up; it refills from the journals.
 
