@@ -234,11 +234,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1784993315,
-        "narHash": "sha256-hWVL5YoS7XzfONhD7DtIINAgmHFoDq/qhMqyh0Vayvc=",
+        "lastModified": 1785003796,
+        "narHash": "sha256-ko0vPNIJAT0ESelWggi/5WZCfPprXUOKWIPTR9JVAAQ=",
         "ref": "main",
-        "rev": "703069023c7276e66ca3607d6c84076be1500a81",
-        "revCount": 10,
+        "rev": "cb6200fdb2edbdd512fc558ee349c5123e580f68",
+        "revCount": 19,
         "type": "git",
         "url": "https://git.mgmt.lan/briggs/isc.git"
       },
