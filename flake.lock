@@ -240,12 +240,12 @@
         "rev": "d6e28b9b7e21188b9a3e705f0838c80633f2bb03",
         "revCount": 9,
         "type": "git",
-        "url": "ssh://forgejo@git.mgmt.lan:2222/briggs/isc.git"
+        "url": "https://git.mgmt.lan/briggs/isc.git"
       },
       "original": {
         "ref": "main",
         "type": "git",
-        "url": "ssh://forgejo@git.mgmt.lan:2222/briggs/isc.git"
+        "url": "https://git.mgmt.lan/briggs/isc.git"
       }
     },
     "newspaper": {

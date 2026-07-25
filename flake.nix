@@ -67,7 +67,15 @@
     # records exactly which isc produced a given comment. follows nixpkgs-stable
     # like the servers, adding no extra nixpkgs to this lock.
     isc = {
-      url = "git+ssh://forgejo@git.mgmt.lan:2222/briggs/isc.git?ref=main";
+      # https, not ssh: the CI runner has no Forgejo SSH identity, and nix
+      # fetches inputs as its own user rather than the workflow's. The repo is
+      # public and hosts trust the internal CA (modules/internal-ca.nix), so
+      # this needs no credentials anywhere.
+      #
+      # Note inputs.newspaper below still uses git+ssh and only resolves in CI
+      # because its source already happens to be in hacktop's store - one
+      # nix-collect-garbage away from breaking the build. Worth moving too.
+      url = "git+https://git.mgmt.lan/briggs/isc.git?ref=main";
       inputs.nixpkgs.follows = "nixpkgs-stable";
     };
     # Declarative Minecraft servers (NeoForge/Fabric/vanilla launchers, mod
