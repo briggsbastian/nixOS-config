@@ -130,7 +130,6 @@
       # be worth seeing.
       "2200121"
 
-
       # dnp3 - beyond the module's default 2270000-2270004
       "2270005" # DNP3 Too many points in message
       "2270006" # DNP3 Too many objects
