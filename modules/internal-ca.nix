@@ -61,6 +61,27 @@ in
       '';
     };
 
+    extraNames = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [ "alerts.mgmt.lan" ];
+      description = ''
+        Further mgmt-hosted names to resolve locally, for the same reason as the
+        CA and cache above: no LAN host actually uses AdGuard as its resolver, so
+        *.mgmt.lan resolution is incidental rather than designed. Measured
+        2026-07-25 - hacktop and media could not resolve alerts.mgmt.lan at all,
+        while mgmt and playground could.
+
+        alerts.mgmt.lan is here so CI on hacktop can read Alertmanager through
+        the nginx proxy that already fronts it. Without this, collecting alerts
+        would need isc to run on mgmt itself - a whole second home for the
+        control plane, to work around a name not resolving.
+
+        This pins names; it does not fix the underlying DNS. Pointing hosts at
+        AdGuard is a real trade (mgmt becomes a hard dependency for resolution
+        on every box) and deserves its own decision.
+      '';
+    };
+
     useCache = lib.mkEnableOption "add mgmt's Harmonia cache as a substituter (cache.mgmt.lan serves a real step-ca cert as of 2026-06-15)";
   };
 
@@ -75,7 +96,8 @@ in
     networking.hosts."${cfg.mgmtIp}" = [
       (hostOf cfg.acmeDirectory)
       (hostOf cfg.cacheUrl)
-    ];
+    ]
+    ++ cfg.extraNames;
 
     # 2. Add mgmt's binary cache (cfg.useCache). cache.mgmt.lan serves a real
     #    step-ca cert and the root is trusted via item 1, so nix can verify it.
