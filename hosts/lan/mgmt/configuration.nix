@@ -18,6 +18,7 @@
     ./modules/backup.nix
     ./modules/newspaper.nix
     ./modules/launchpad.nix
+    ./modules/suricata.nix
   ];
 
   boot.loader.grub.enable = true;

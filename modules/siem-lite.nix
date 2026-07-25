@@ -34,6 +34,8 @@ let
       }
     }
 
+    ${cfg.agent.extraConfig}
+
     // only here to provide .rules to the journal source below; nothing flows
     // through this component. one attribute per line or it won't parse.
     loki.relabel "journal" {
@@ -73,6 +75,16 @@ in
     server.enable = lib.mkEnableOption "the central SIEM-lite server (Loki + Alertmanager + Grafana Loki datasource + local Alloy)";
 
     agent.enable = lib.mkEnableOption "the SIEM-lite log shipper (Alloy: systemd journal -> central Loki)";
+
+    agent.extraConfig = lib.mkOption {
+      type = lib.types.lines;
+      default = "";
+      description = ''
+        Extra Alloy config appended after the built-in journal source (e.g. an
+        extra loki.source.file component). Must forward_to
+        [loki.write.default.receiver] like the built-in journal pipeline does.
+      '';
+    };
 
     lokiEndpoint = lib.mkOption {
       type = lib.types.str;
