@@ -124,6 +124,15 @@ sudo systemctl start grafana        # start it by hand first; faster to diagnose
                                     # than a 40s colmena round trip
 ```
 
+If the unit dies with `status=200/CHDIR`, the state directory is simply missing:
+recreate it and start again. `monitoring.nix` sets `StateDirectory=grafana` so
+systemd does this itself, but a host still running an older generation will not
+have that yet.
+
+```sh
+sudo install -d -o grafana -g grafana -m 0700 /var/lib/grafana
+```
+
 `grafana-pre-start` recreates the `conf` and `tools` symlinks, and `plugins`
 re-downloads, so the directory rebuilds itself.
 

@@ -396,6 +396,17 @@ in
     ];
   };
 
+  # The upstream module gives grafana.service WorkingDirectory=/var/lib/grafana
+  # but no StateDirectory, so nothing recreates that directory if it is ever
+  # absent - the unit just dies at step CHDIR with status=200. That makes the
+  # documented "reset Grafana's state" procedure a footgun, and would also bite
+  # a restore onto a clean box. StateDirectory makes systemd create it with the
+  # right owner and mode before ExecStartPre runs.
+  systemd.services.grafana.serviceConfig = {
+    StateDirectory = "grafana";
+    StateDirectoryMode = "0700";
+  };
+
   services.uptime-kuma = {
     enable = true;
     settings = {
