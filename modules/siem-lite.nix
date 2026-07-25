@@ -216,10 +216,24 @@ in
                   summary: "Repeated SSH auth failures on {{ $labels.host }}"
                   description: "{{ $value }} failed SSH logins in 5m on {{ $labels.host }}"
 
-              # sudo logs as SYSLOG_IDENTIFIER=sudo, not its own unit, so match content
+              # sudo logs as SYSLOG_IDENTIFIER=sudo, not its own unit, so this has to
+              # match on content rather than select a unit like SSHBruteForce does.
+              #
+              # unit!="loki.service" is load-bearing, not tidiness. Loki's ruler
+              # logs every query it runs, verbatim, to the journal; Alloy ships
+              # mgmt's journal back into Loki; so this rule's own evaluation log
+              # contains the strings this rule matches on. Without the exclusion it
+              # fires on itself forever - it did, continuously, from 2026-07-11
+              # until this was found, while zero real sudo failures existed.
+              #
+              # Note that NO content filter can fix this. Tightening the match to
+              # `pam_unix(sudo:auth): authentication failure` fails the same way,
+              # because that string then appears in the ruler's log of the query.
+              # Only a label selector breaks the loop - which is why SSHBruteForce,
+              # scoped to {unit="sshd.service"}, was never affected.
               - alert: SudoFailure
                 expr: |
-                  sum by (host) (count_over_time({job="systemd-journal"} |= `sudo:` |~ `authentication failure` [10m])) > 3
+                  sum by (host) (count_over_time({job="systemd-journal", unit!="loki.service"} |= `sudo:` |~ `authentication failure` [10m])) > 3
                 for: 0m
                 labels: { severity: warning }
                 annotations:
