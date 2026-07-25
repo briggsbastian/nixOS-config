@@ -10,11 +10,77 @@
 # Alerts (eve.json, event_type=alert) get tailed into the existing Loki by
 # alcove.siemLite.agent.extraConfig, then a LogQL rule below routes them
 # through the same Alertmanager -> ntfy pipeline as SSHBruteForce/SudoFailure.
-{ options, ... }:
+{ options, pkgs, ... }:
 
 {
+  # `enabledSources` is not authoritative on its own, and silently so.
+  #
+  # suricata-update keeps its enabled sources as one yaml per source under
+  # /var/lib/suricata/update/sources/. The module's script only ever runs
+  # `enable-source` for each configured source - it never disables the rest.
+  # So removing an entry from enabledSources removes nothing: the stale file
+  # stays, `suricata-update update` keeps pulling it, and the declared config
+  # and the running ruleset diverge with nothing to show for it.
+  #
+  # Verified on this box: after trimming ten sources to five, all ten yaml
+  # files were still present and would still have been fetched.
+  #
+  # Clearing them before the enable-source calls makes the Nix config the only
+  # input. Files rather than the directory, so index.yaml beside it survives.
+  #
+  # Wrapped in sh because systemd does NOT glob in ExecStartPre - a bare
+  # `rm -f .../*.yaml` passes the asterisk through literally, matches nothing,
+  # and exits 0 under -f. A silent no-op inside the fix for a silent no-op.
+  systemd.services.suricata-update.serviceConfig.ExecStartPre = [
+    "${pkgs.bash}/bin/sh -c '${pkgs.coreutils}/bin/rm -f /var/lib/suricata/update/sources/*.yaml'"
+  ];
+
   services.suricata = {
     enable = true;
+
+    # The module default enables TEN sources. That was never a deliberate
+    # choice here - the header comment above said "Emerging Threats Open
+    # ruleset (enabledSources default)", which was only ever a third true.
+    #
+    # Trimmed to five on the principle that an alert reaching a phone must be
+    # something a person would act on. Rulesets built to generate *leads for an
+    # analyst to triage* are a different tool, and routing them into the same
+    # ntfy pipeline as NodeDown is how a notification channel becomes noise.
+    #
+    # Kept:
+    #   et/open              the baseline. Broad, curated, actively maintained.
+    #   abuse.ch/sslbl-*     small, high-signal C2/JA3 certificate intel. Almost
+    #                        never fires; when it does, it means something.
+    #   stamus/lateral       lateral movement. The most relevant source on this
+    #                        estate, given playground runs Kali and a live HTB
+    #                        VPN on the same flat segment as everything else.
+    #
+    # Dropped:
+    #   pawpatrules          rates the gateway doing mDNS as severity 1, with
+    #                        emoji, category "Potential Corporate Privacy
+    #                        Violation". Only 6 of 680 observed alerts, but it
+    #                        was the ONLY source producing severity 1 - so it
+    #                        actively corrupts severity-based triage. Measured:
+    #                        every high-severity alert on this network was
+    #                        pawpatrules calling multicast DNS an incident.
+    #   tgreen/hunting       hunting rules are designed to surface leads, not to
+    #                        page. Wrong end of the funnel for this pipeline.
+    #   etnetera/aggressive  aggressive IP blocklist; high false-positive rate
+    #                        by name and design, and overlaps abuse.ch.
+    #   oisf/trafficid       identifies applications and TLS fingerprints. Alerts
+    #                        on normal traffic by design - informational.
+    #   ptrules/open         decent quality, but adds volume on top of et/open
+    #                        without covering anything this estate needs.
+    #
+    # This trim removes ~1% of observed alert volume. It is about signal
+    # quality, not volume - the volume problem is sid 2200121, handled below.
+    enabledSources = [
+      "et/open"
+      "abuse.ch/sslbl-blacklist"
+      "abuse.ch/sslbl-c2"
+      "abuse.ch/sslbl-ja3"
+      "stamus/lateral"
+    ];
 
     # Ten ICS signatures kept the whole IDS down from 2026-07-17 to 2026-07-25.
     #
@@ -43,6 +109,27 @@
     # different five rules. Verified by evaluating the result, not by reading
     # the source.
     disabledRules = options.services.suricata.disabledRules.default ++ [
+      # 2200121 "SURICATA Ethertype unknown" - 86% of all alerts on this box.
+      #
+      # A decoder diagnostic, not a threat signature: classtype
+      # protocol-command-decode, triggered by decode-event
+      # ethernet.unknown_ethertype. It reports that suricata saw an ethernet
+      # frame whose ethertype it does not parse. On a LAN full of UniFi
+      # discovery and link-layer chatter that is constant, expected, and not
+      # something anyone will ever act on.
+      #
+      # It ships with a rate limit of its own - `threshold: type limit, track
+      # by_rule, seconds 60, count 1` - which is NOT being honoured. Measured
+      # over the first 1228 seconds after the engine came up: 656 alerts, 32
+      # per minute against a rule that says at most one. Decode-phase events
+      # appear to bypass the detect engine's thresholding. That is the reason
+      # this one rule buries everything else.
+      #
+      # Only this sid is disabled, not the other 21 decoder-event rules - they
+      # are quiet here and some (invalid IP headers, oversized packets) would
+      # be worth seeing.
+      "2200121"
+
       # dnp3 - beyond the module's default 2270000-2270004
       "2270005" # DNP3 Too many points in message
       "2270006" # DNP3 Too many objects
