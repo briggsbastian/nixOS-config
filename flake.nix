@@ -61,6 +61,15 @@
       url = "git+ssh://forgejo@git.mgmt.lan:2222/briggs/newspaper.git?ref=main";
       inputs.nixpkgs.follows = "nixpkgs-stable";
     };
+    # Infrastructure Security Controller: scans each host's closure for known
+    # vulnerabilities and turns the delta across a flake.lock bump into a PR
+    # comment. Pinned here rather than `nix run`-ed unpinned in CI so the lock
+    # records exactly which isc produced a given comment. follows nixpkgs-stable
+    # like the servers, adding no extra nixpkgs to this lock.
+    isc = {
+      url = "git+ssh://forgejo@git.mgmt.lan:2222/briggs/isc.git?ref=main";
+      inputs.nixpkgs.follows = "nixpkgs-stable";
+    };
     # Declarative Minecraft servers (NeoForge/Fabric/vanilla launchers, mod
     # symlinks). Used by hacktop for the All the Mons (ATMons) modpack server;
     # follows stable like the servers it runs on.
@@ -307,6 +316,11 @@
 
       # `nix fmt` formats + lints the whole tree.
       formatter.x86_64-linux = treefmtEval.config.build.wrapper;
+
+      # Re-exported so CI (and a human) can `nix run .#isc` and get the exact
+      # revision this flake.lock pins, rather than whatever isc's main happens
+      # to be at the time.
+      packages.x86_64-linux.isc = inputs.isc.packages.x86_64-linux.isc;
 
       devShells.x86_64-linux.default = pkgs.mkShell {
         # colmena (deploy) + the sops/age toolchain (edit + re-key secrets).

@@ -111,3 +111,54 @@ jobs:
           else
             echo "PR create failed (HTTP $code):"; cat /tmp/pr.json; exit 1
           fi
+
+  # What does this bump actually buy? The PR above says every host built; it does
+  # not say whether anything got safer. isc scans the built closure of every host
+  # before and after the bump and posts the difference, so the answer is measured
+  # rather than inferred from changelogs: "closes CVE-X" means the vulnerable
+  # package is gone from the closure that would actually be deployed.
+  #
+  # Both scans happen in this one job, so isc's findings database being ephemeral
+  # in CI does not matter - nothing needs to outlive the run.
+  #
+  # Never fails the workflow. A missing comment is a worse outcome than a merged
+  # bump, but a red pipeline over a scanner hiccup would train everyone to ignore
+  # it, so this is advisory by design.
+  vuln-delta:
+    needs: [update, open-pr]
+    if: needs.update.outputs.changed == 'true'
+    runs-on: nix
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: scan main, then the bump branch
+        run: |
+          set -eu
+          base=$(git rev-parse main)
+          head=$(git rev-parse origin/automated/flake-lock-bump)
+          echo "base=$base" >> "$GITHUB_ENV"
+          echo "head=$head" >> "$GITHUB_ENV"
+
+          # isc comes from this flake's own pinned input, so the comment is
+          # reproducible from the lock.
+          nix run .#isc -- --repo . scan --ref "$base"
+          nix run .#isc -- --repo . scan --ref "$head"
+
+      - name: post the delta to the PR
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SERVER: ${{ github.server_url }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -eu
+          api="${SERVER}/api/v1/repos/${REPO}/pulls?state=open&limit=50"
+          number=$(curl -sS -H "Authorization: token ${TOKEN}" "$api" \
+            | jq -r '.[] | select(.head.ref=="automated/flake-lock-bump") | .number' | head -1)
+          if [ -z "$number" ]; then
+            echo "no open lock-bump PR to comment on"; exit 0
+          fi
+          FORGEJO_TOKEN="$TOKEN" nix run .#isc -- --repo . comment \
+            --pr "$number" --from "$base" --to "$head"
