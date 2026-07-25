@@ -342,15 +342,28 @@ in
     ];
   };
 
+  # Grafana's DB encryption key. Grafana 13 (nixos-26.05) dropped the module's
+  # implicit default, and this was briefly pinned to upstream's old fallback
+  # ("SW2YcwTIb9zpOOhoPsMm") to keep existing encrypted DB values readable across
+  # the upgrade. Two things retired that compromise:
+  #
+  #   - the pinned value is public knowledge - it is printed verbatim in nixpkgs'
+  #     own assertion message - so anything in the DB was encrypted with a key
+  #     anyone can look up, and gitleaks was right to fail CI over it
+  #   - grafana.service had been dead since 2026-07-17 anyway, so there were no
+  #     encrypted values left to preserve and the compatibility argument was moot
+  #
+  # A real key now comes from sops. Rotating it makes any pre-existing encrypted
+  # DB values unreadable, which is why /var/lib/grafana/grafana.db has to be reset
+  # once by hand alongside this change - see MAINTENANCE.md.
+  sops.secrets.grafana_secret_key = {
+    sopsFile = ../../../../secrets/mgmt.yaml;
+    owner = "grafana";
+  };
+
   services.grafana = {
     enable = true;
-    # Grafana 13 (nixos-26.05) dropped the module's implicit secret_key default;
-    # unset, existing DB secrets become undecryptable. This IS that old default
-    # (public knowledge, upstream's fallback) - it's what this instance has been
-    # encrypting with all along, pinned now for a behavior-preserving upgrade.
-    # To actually secure it: put a fresh key in secrets/mgmt.yaml and point this
-    # at it with $__file{...}, accepting that old encrypted DB values are lost.
-    settings.security.secret_key = "SW2YcwTIb9zpOOhoPsMm";
+    settings.security.secret_key = "$__file{${config.sops.secrets.grafana_secret_key.path}}";
     settings.server = {
       http_addr = "127.0.0.1";
       http_port = 3002;

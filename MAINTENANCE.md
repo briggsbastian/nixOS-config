@@ -100,6 +100,32 @@ ACME validation needs each box to resolve `*.mgmt.lan` itself, so `step-ca.nix` 
 `internal-ca.nix` pin the ACME and cache hostnames to 192.168.1.222 in `/etc/hosts`.
 Don't remove those pins or certs fall back to the untrusted minica self-signed cert.
 
+## Grafana
+
+Grafana's DB encryption key comes from sops (`grafana_secret_key` in
+`secrets/mgmt.yaml`), referenced with Grafana's `$__file{}` provider. It was
+briefly pinned to upstream's old public default during the 26.05 upgrade; see the
+comment in `hosts/lan/mgmt/modules/monitoring.nix` for why that is gone.
+
+**Rotating `secret_key` makes every previously encrypted DB value unreadable.**
+Grafana has no supported in-place rotation, so a rotation means resetting the DB:
+
+```sh
+ssh mgmt
+sudo systemctl stop grafana
+sudo mv /var/lib/grafana/grafana.db /var/lib/grafana/grafana.db.bak-$(date +%F)
+# then deploy, which starts Grafana on a fresh DB and re-provisions from the flake
+```
+
+Nothing of value is lost by this: datasources, dashboards and alert rules are all
+provisioned declaratively from the flake. What *is* lost is anything created
+through the UI — ad-hoc dashboards, users beyond the provisioned admin, API keys.
+
+If `grafana.service` fails with `Datasource provisioning error: data source not
+found`, the on-disk DB is the problem, not the config — that exact failure kept
+mgmt's Grafana down from 2026-07-17 and blocked every `colmena apply --on mgmt`,
+because a failed unit makes activation fail. Reset the DB as above.
+
 ## Health
 
 ```sh
@@ -135,6 +161,7 @@ push; the hacktop runner advertises `kvm` + `nixos-test`, so it can build them.
 nix flake check --show-trace               # everything (eval + lint + VM tests)
 nix build .#checks.x86_64-linux.mgmt-ca    # step-ca issues a cert + nginx serves TLS
 nix build .#checks.x86_64-linux.log-path   # Alloy ships a journal line into Loki
+nix build .#checks.x86_64-linux.mgmt-backup # the backup writes an archive + its success metric
 nix fmt                                     # nixfmt + statix + deadnix (also a check)
 ```
 
@@ -148,18 +175,42 @@ State that isn't in the repo and would be lost on a reinstall:
 | What | Where | Notes |
 |---|---|---|
 | Media library | NAS 192.168.1.213:/srv/media | Back up the NAS. |
-| mgmt service secrets | `mgmt:/var/lib/mgmt-secrets/` | NetBox/Snipe-IT/cache keys. Auto-backed-up. |
-| step-ca root + intermediate | `mgmt:/var/lib/private/step-ca/` | Lose it and every device re-trusts. Auto-backed-up. |
+| mgmt service secrets | `mgmt:/var/lib/mgmt-secrets/` | NetBox/Snipe-IT/cache keys. Auto-backed-up — **verify, don't assume** (below). |
+| step-ca root + intermediate | `mgmt:/var/lib/private/step-ca/` | Lose it and every device re-trusts. Auto-backed-up — **verify, don't assume** (below). |
 | SSH host keys | `/etc/ssh/ssh_host_*` | The sops identity; keep across re-images. |
 | sops secrets | `secrets/*.yaml` | Safe in git (encrypted). |
 
-`backup.nix` runs daily at 03:30: it streams `/var/lib/{private/step-ca,mgmt-secrets}`
+`backup.nix` runs daily at 03:30: it streams `/var/lib/private/step-ca`,
+`/var/lib/mgmt-secrets` and — when NetBox is enabled — `/var/backup/postgresql`
 through `age` to `192.168.1.213:/srv/media/_backups/mgmt/`, keeping the newest 14.
 Restore on the desktop:
 
 ```sh
 age -d -i ~/.config/sops/age/keys.txt mgmt-state-<ts>.tar.age | sudo tar -C / -xv
 ```
+
+### Confirm the backup is real, not merely scheduled
+
+On 2026-07-24 the table above said "Auto-backed-up" while `mgmt-backup.service`
+had failed every night since it was written and had **never once succeeded**: an
+optional source path (`/var/backup/postgresql`, produced by NetBox, whose import
+is commented out) was handed to `tar` unconditionally, so the run aborted and
+step-ca's only off-box copy was never written. A green timer is not a backup.
+
+```sh
+# did the last run actually produce an archive? this file is written only on success
+ssh deploy@192.168.1.222 cat /var/lib/node-exporter-textfile/mgmt_backup.prom
+ssh deploy@192.168.1.222 sudo ls -la /mnt/nas/_backups/mgmt/
+
+# and can it be restored? worth doing occasionally, on the desktop:
+age -d -i ~/.config/sops/age/keys.txt mgmt-state-<ts>.tar.age | tar -tv | head
+```
+
+`checks.x86_64-linux.mgmt-backup` covers the regression, and the `BackupStale`
+alert reads the metric above. Note that a failed run of the old script still left
+a plausible-looking `mgmt-state-*.tar.age` on the NAS built from a truncated tar
+stream — treat any archive dated before 2026-07-24 as unverified until you have
+listed it with the command above.
 
 Loki's data (`mgmt:/var/lib/loki`) isn't backed up; it refills from the journals.
 
