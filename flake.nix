@@ -126,10 +126,36 @@
         };
       };
 
+      # Version metadata, pinned explicitly so both eval paths agree.
+      #
+      # Colmena evaluates nodes through nixpkgs' nixos/lib/eval-config.nix, so it
+      # sees nixpkgs' *plain* lib; nixosConfigurations goes through
+      # nixpkgs-stable.lib.nixosSystem and sees the flake-extended one. Two things
+      # differ as a result: lib.trivial.versionSuffix falls back to its hardcoded
+      # "pre-git" (the .version-suffix file is never present in a fetched flake
+      # input), and nixpkgs.flake.source is left unset, which leaves a deployed
+      # host with an empty flake registry and NIX_PATH pointing at channels that
+      # do not exist on a flake-managed box.
+      #
+      # The upshot was that colmenaHive.nodes.<h> and nixosConfigurations.<h>
+      # built different closures for every host at the same commit -- so CI's
+      # build-hosts matrix was validating an artifact that never shipped. Setting
+      # these explicitly makes the two converge.
+      mkVersionInfo = np: {
+        system.nixos.versionSuffix = ".${builtins.substring 0 8 np.lastModifiedDate}.${np.shortRev}";
+        system.nixos.revision = np.rev;
+        nixpkgs.flake.source = np.outPath;
+        # Stamp the config commit into the built system, so a host can be asked
+        # what it is running instead of it being inferred from store-path
+        # equality. Surfaces in `nixos-version --json`.
+        system.configurationRevision = self.rev or self.dirtyRev or "dirty";
+      };
+
       # Every server = shared baseline + sops + its own host module. One module
       # list feeds both the nixosConfiguration and the Colmena node, so they
       # never drift.
       serverModules = name: meta: [
+        (mkVersionInfo nixpkgs-stable)
         ./modules/common.nix
         ./modules/internal-ca.nix
         ./modules/siem-lite.nix
@@ -209,6 +235,7 @@
       # step-ca owns ACME - common.nix would fight both); it gets only the deploy
       # identity. Built against its pinned nixpkgs for a churn-free cut.
       mgmtModules = [
+        (mkVersionInfo nixpkgs-mgmt) # mgmt's own pin, not nixpkgs-stable
         ./modules/deploy-user.nix
         sops-nix.nixosModules.sops # mgmt needs sops (Grafana admin password)
         ./modules/siem-lite.nix # mgmt is the central Loki/Grafana/Alertmanager server
