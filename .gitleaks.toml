@@ -1,11 +1,35 @@
 # .gitleaks.toml — repo secret-scanning config.
-# Extends gitleaks' default ruleset (useDefault) and documents known false positives.
+#
+# Extends gitleaks' default ruleset (useDefault). Each entry below states which
+# kind of exception it is: a genuine FALSE POSITIVE (the finding is wrong) or a
+# HISTORICAL exception (the finding was right, and has since been fixed).
+# Never file the second kind as the first — that launders a real finding into
+# "nothing to see here".
 
 [extend]
 useDefault = true
 
 [allowlist]
-description = "Flatpak .flatpakref files carry the remote's PUBLIC GPG verification key (e.g. Flathub's), not a credential."
+description = "See the per-entry notes below."
+
+# FALSE POSITIVE. Flatpak .flatpakref files carry the remote's PUBLIC GPG
+# verification key (e.g. Flathub's). That is a signature-checking key, not a
+# credential.
 paths = [
   '''flatpaks/.*\.flatpakref$''',
+]
+
+# HISTORICAL, and the finding was correct. 022c23d ("mgmt: bump nixpkgs-mgmt to
+# nixos-26.05") pinned Grafana's secret_key to upstream's OLD DEFAULT so existing
+# encrypted DB values stayed readable across the 13.x upgrade. That value is
+# public knowledge — nixpkgs prints it verbatim in its own assertion message — so
+# nothing private was ever exposed, but gitleaks was right to fail: whatever
+# Grafana had encrypted was encrypted with a key anyone can look up.
+#
+# HEAD no longer contains it; the key comes from sops (see monitoring.nix) and
+# grafana.db was reset when it rotated. This allowlists the one historical COMMIT
+# rather than the string, deliberately — if that value is ever reintroduced in a
+# new commit, gitleaks must fail again.
+commits = [
+  "022c23d8142bcaf6fe28f6b55166b0f1753d1726",
 ]
