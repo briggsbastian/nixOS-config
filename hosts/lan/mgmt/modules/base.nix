@@ -14,7 +14,21 @@
     dig
   ];
 
-  services.openssh.enable = true;
+  # mgmt does not take modules/common.nix (its base.nix owns SSH and firewall,
+  # and step-ca owns ACME), so the fleet-wide key-only SSH policy never reached
+  # it. Until now mgmt was the ONLY host accepting password authentication -
+  # and it is the one holding the step-ca root, Forgejo, and the LAN's DNS.
+  #
+  # Verified against the running sshd before changing anything: it really was
+  # `PasswordAuthentication yes`, not just an unset option defaulting oddly.
+  services.openssh = {
+    enable = true;
+    settings = {
+      PasswordAuthentication = false;
+      KbdInteractiveAuthentication = false; # otherwise it is a password prompt by another name
+      PermitRootLogin = "no";
+    };
+  };
 
   # the GNOME install this replaces auto-suspended; a server must never sleep
   systemd.targets.sleep.enable = false;
