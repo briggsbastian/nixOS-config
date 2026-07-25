@@ -34,12 +34,21 @@ jobs:
       - name: nix flake update (holding the pinned mgmt input)
         id: bump
         run: |
-          # nixpkgs-mgmt is frozen on purpose, so it is NEVER listed here. Every
-          # other input is updated by name. Keep this list in sync with the
-          # inputs in flake.nix (minus nixpkgs-mgmt).
-          nix flake update \
-            nixpkgs nixpkgs-stable home-manager nix-flatpak nixvim \
-            claude-code claude-desktop colmena sops-nix disko treefmt-nix
+          # The input list is DERIVED, not written out. It used to be hardcoded
+          # with a comment asking whoever edited flake.nix to keep it in sync,
+          # and by 2026-07-25 four inputs had quietly stopped being updated:
+          # isc, newspaper, nix-minecraft and nixvim-stable. A list that must be
+          # manually kept in sync eventually is not.
+          #
+          # nixpkgs-mgmt is excluded because it is frozen on purpose - mgmt runs
+          # the LAN's DNS and PKI, and package churn there is a deliberate,
+          # in-a-window decision, never an automated PR.
+          inputs=$(nix flake metadata --json \
+            | jq -r '.locks.nodes.root.inputs | keys[]' \
+            | grep -vx 'nixpkgs-mgmt' \
+            | tr '\n' ' ')
+          echo "updating: $inputs"
+          nix flake update $inputs
           if git diff --quiet -- flake.lock; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "flake.lock unchanged; nothing to do."
