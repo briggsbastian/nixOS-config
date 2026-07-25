@@ -17,6 +17,11 @@
   ...
 }:
 
+let
+  # Named once: the tail target, the tmpfiles guarantee and alloy's restart
+  # trigger must all refer to the same path or the guarantee is worthless.
+  eveLog = "/var/log/suricata/eve.json";
+in
 {
   # Changing the ruleset does not change the running engine.
   #
@@ -192,9 +197,39 @@
   # systemd-journal supplementary group rather than replacing it.
   systemd.services.alloy.serviceConfig.SupplementaryGroups = [ "suricata" ];
 
+  # Alloy's loki.source.file gives up permanently if its target is missing at
+  # startup. It does not retry, and it does not fail the service - one
+  # component dies and everything else carries on looking healthy.
+  #
+  # What that produced here, in order:
+  #
+  #   2026-07-17 23:04  suricata dies on the ICS rules, stops writing eve.json
+  #   2026-07-18 06:04  alloy restarts, cannot stat the file, logs
+  #                     "failed to create source, skipping" and never looks again
+  #   2026-07-25 13:54  suricata fixed and writing again - alloy still not tailing
+  #
+  # So `{job="suricata"}` has never existed in Loki, and SuricataAlert - which
+  # queries exactly that - has never been capable of firing. Not "did not
+  # fire": could not. The IDS pipeline was broken end to end in two independent
+  # places, and fixing the engine alone would have left alerts going nowhere
+  # while every dashboard showed green.
+  #
+  # tmpfiles guarantees the file exists regardless of suricata's state, so the
+  # tail always starts and simply waits for content. This removes the ordering
+  # dependency rather than papering over it with After=.
+  systemd.tmpfiles.rules = [
+    "f ${eveLog} 0644 suricata suricata -"
+  ];
+
+  # Alloy needs one restart to pick up the file it gave up on. Its own config
+  # is unchanged, so nothing would otherwise restart it - the same trap as
+  # suricata and its ruleset. Naming the tail target as the trigger means any
+  # future change to that path also forces the restart it implies.
+  systemd.services.alloy.restartTriggers = [ "tail-target:${eveLog}" ];
+
   alcove.siemLite.agent.extraConfig = ''
     loki.source.file "suricata" {
-      targets    = [{ __path__ = "/var/log/suricata/eve.json", job = "suricata" }]
+      targets    = [{ __path__ = "${eveLog}", job = "suricata" }]
       forward_to = [loki.write.default.receiver]
     }
   '';
