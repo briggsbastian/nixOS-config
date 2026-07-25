@@ -21,6 +21,10 @@ let
   # itself (step-ca.nix pins *.mgmt.lan -> 192.168.1.222 in /etc/hosts), so the
   # probe stays on-box.
   blackboxPort = 9115;
+  # world-readable: node-exporter (fixed system user, see node.nix) only needs
+  # read access; writers (mgmt-backup.service, root) write+rename atomically.
+  textfileDir = "/var/lib/node-exporter-textfile";
+  nasIp = "192.168.1.213";
   acmeVhosts = lib.attrNames (
     lib.filterAttrs (_: v: v.enableACME) config.services.nginx.virtualHosts
   );
@@ -69,6 +73,8 @@ let
   };
 in
 {
+  systemd.tmpfiles.rules = [ "d ${textfileDir} 0755 root root -" ];
+
   services.prometheus = {
     enable = true;
     listenAddress = "127.0.0.1";
@@ -78,6 +84,9 @@ in
       listenAddress = "127.0.0.1";
       port = 9100;
       enabledCollectors = [ "systemd" ];
+      # textfile collector: one-off/job metrics that don't fit a normal
+      # exporter (see the backup-freshness metric backup.nix writes here).
+      extraFlags = [ "--collector.textfile.directory=${textfileDir}" ];
     };
 
     # Blackbox prober for the cert-expiry check below. localhost-bound; Prometheus
@@ -91,8 +100,8 @@ in
     # One "node" job covering the whole fleet. instance = hostname (not ip:port)
     # keeps labels low-cardinality and makes alerts read "node media down". mgmt
     # is scraped over localhost; everyone else by IP, derived from fleet-hosts.nix
-    # so this list never drifts from the Colmena host map. cloud1 is absent
-    # (scrape = false) until it has a private path to mgmt.
+    # so this list never drifts from the Colmena host map. cloud1 is scraped over
+    # its wg-mc tunnel address (h.scrapeIp), not its public deploy IP.
     scrapeConfigs = [
       {
         job_name = "node";
@@ -103,7 +112,7 @@ in
           }
         ]
         ++ lib.mapAttrsToList (name: h: {
-          targets = [ "${h.ip}:9100" ];
+          targets = [ "${h.scrapeIp or h.ip}:9100" ];
           labels.instance = name;
         }) scrapedHosts;
       }
@@ -117,6 +126,30 @@ in
         metrics_path = "/probe";
         params.module = [ "http_tls" ];
         static_configs = [ { targets = certProbeTargets; } ];
+        relabel_configs = [
+          {
+            source_labels = [ "__address__" ];
+            target_label = "__param_target";
+          }
+          {
+            source_labels = [ "__param_target" ];
+            target_label = "instance";
+          }
+          {
+            target_label = "__address__";
+            replacement = "127.0.0.1:${toString blackboxPort}";
+          }
+        ];
+      }
+
+      # The NAS (192.168.1.213): unmanaged, no SNMP/API, so this is a bare
+      # reachability check - TCP connect to the NFS port. Proves both "NAS is
+      # up" and "NFS is actually serving", which is what media + backups need.
+      {
+        job_name = "blackbox-nas";
+        metrics_path = "/probe";
+        params.module = [ "tcp_connect" ];
+        static_configs = [ { targets = [ "${nasIp}:2049" ]; } ];
         relabel_configs = [
           {
             source_labels = [ "__address__" ];
@@ -278,6 +311,33 @@ in
                 annotations:
                   summary: "Public Minecraft path down ({{ $labels.instance }})"
                   description: "TCP connect to {{ $labels.instance }} has failed for 10m - a link in Linode FW -> cloud1 DNAT -> tunnel -> hacktop server is broken."
+
+              # NAS is unmanaged (no SNMP/API) - all we get is "is NFS answering".
+              - alert: NasDown
+                expr: probe_success{job="blackbox-nas"} == 0
+                for: 10m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "NAS unreachable ({{ $labels.instance }})"
+                  description: "NFS on the NAS has not answered for 10m - media library and the only backup copy of PKI/secrets/IPAM both live there."
+
+          - name: backups
+            rules:
+              # mgmt-backup.service writes this timestamp on every successful
+              # run (backup.nix); daily at 03:30, so 26h gives >1h grace before
+              # paging. Absent metric (never run, or textfile dir wiped) counts
+              # as stale via the `or` clause instead of going silent.
+              - alert: BackupStale
+                expr: |
+                  (time() - mgmt_backup_last_success_timestamp_seconds > 26 * 3600)
+                  or absent(mgmt_backup_last_success_timestamp_seconds)
+                for: 0m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "mgmt's encrypted off-box backup is stale or has never run"
+                  description: "No successful mgmt-backup.service run recorded in the last 26h - step-ca, service secrets, and the NetBox DB dump are the only copies of that state."
       ''
     ];
   };
@@ -301,8 +361,21 @@ in
       {
         name = "Prometheus";
         type = "prometheus";
+        uid = "prometheus"; # referenced by dashboards/fleet-overview.json
         url = "http://127.0.0.1:9090";
         isDefault = true;
+      }
+    ];
+
+    # Fleet Overview: node/backup/cert health at a glance, one panel per
+    # existing alert rule above plus the trends behind them. siem-lite.nix
+    # provisions its own (Loki) dashboards under a separate "siem-lite"
+    # provider; this one is Prometheus-only and mgmt-specific.
+    provision.dashboards.settings.providers = [
+      {
+        name = "metrics";
+        options.path = ./metrics-dashboards;
+        options.foldersFromFilesStructure = false;
       }
     ];
   };
@@ -511,16 +584,12 @@ in
       }
       {
         "Lab" = [
+          # Direct IP on purpose: the Incus UI authenticates with TLS client
+          # certs, which nginx can't proxy (see hosts/lan/playground/incus.nix).
           {
-            "Guacamole" = {
-              href = "http://192.168.1.217:8080/guacamole/";
-              description = "Browser remote-desktop gateway (RDP/VNC/SSH)";
-            };
-          }
-          {
-            "Cockpit" = {
-              href = "https://cockpit.mgmt.lan";
-              description = "playground libvirt VMs - power/console + host health";
+            "Incus" = {
+              href = "https://192.168.1.217:8443";
+              description = "playground VM/container lab - UI + console (client-cert auth)";
             };
           }
         ];

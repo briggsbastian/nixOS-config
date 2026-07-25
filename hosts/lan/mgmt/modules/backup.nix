@@ -2,6 +2,8 @@
 #   - /var/lib/private/step-ca   CA root + intermediate + keys + db
 #                                (lose this = re-trust the CA on every device)
 #   - /var/lib/mgmt-secrets      generated service secrets (NetBox/Snipe-IT/Harmonia)
+#   - /var/backup/postgresql     nightly netbox pg_dump (services.postgresqlBackup,
+#                                see netbox.nix) - real IPAM data, not regenerable
 # Everything else is in the flake or regenerable.
 #
 # Daily, root tars those two dirs straight into `age` (no plaintext hits disk),
@@ -19,6 +21,10 @@ let
   # this and the fileSystems device below if you add a dedicated backup share.
   nasDir = "/mnt/nas/_backups/mgmt";
   keep = 14;
+  # node_exporter's textfile collector dir (monitoring.nix) - a successful run
+  # here is the only proof the backup actually happened, not just that the
+  # timer fired (BackupStale alert reads this).
+  textfileDir = "/var/lib/node-exporter-textfile";
 in
 {
   # The NAS share media already uses; lazy + non-blocking so a NAS outage can't
@@ -37,7 +43,10 @@ in
 
   systemd.services.mgmt-backup = {
     description = "Encrypted off-box backup of mgmt step-ca + service secrets";
-    after = [ "network-online.target" ];
+    after = [
+      "network-online.target"
+      "postgresqlBackup-netbox.service"
+    ];
     wants = [ "network-online.target" ];
     unitConfig.RequiresMountsFor = [ "/mnt/nas" ];
     path = [
@@ -52,11 +61,20 @@ in
       ts=$(date +%Y%m%d-%H%M%S)
       install -d -m 0700 "${nasDir}"
       # tar -> age streamed: the plaintext tarball never touches disk.
-      tar -cf - -C / var/lib/private/step-ca var/lib/mgmt-secrets \
+      tar -cf - -C / var/lib/private/step-ca var/lib/mgmt-secrets var/backup/postgresql \
         | age -r "${adminRecipient}" -o "${nasDir}/mgmt-state-$ts.tar.age"
       # retention: keep the newest ${toString keep}
       ls -1t "${nasDir}"/mgmt-state-*.tar.age 2>/dev/null | tail -n +${toString (keep + 1)} | xargs -r rm -f
       echo "backup written: ${nasDir}/mgmt-state-$ts.tar.age ($(stat -c%s "${nasDir}/mgmt-state-$ts.tar.age") bytes)"
+
+      # success metric for BackupStale (monitoring.nix) - write-then-rename so
+      # node_exporter never scrapes a half-written file.
+      tmp=$(mktemp "${textfileDir}/.mgmt_backup.XXXXXX")
+      {
+        echo "# TYPE mgmt_backup_last_success_timestamp_seconds gauge"
+        echo "mgmt_backup_last_success_timestamp_seconds $(date +%s)"
+      } > "$tmp"
+      mv "$tmp" "${textfileDir}/mgmt_backup.prom"
     '';
   };
 
