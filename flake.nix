@@ -263,6 +263,9 @@
       checks.x86_64-linux = {
         mgmt-ca = import ./tests/mgmt-ca.nix { inherit pkgs; };
         log-path = import ./tests/log-path.nix { inherit pkgs; };
+        # Guards a real outage: the backup aborted whenever an optional source
+        # path was absent, so step-ca's only off-box copy was never written.
+        mgmt-backup = import ./tests/mgmt-backup.nix { inherit pkgs; };
         # fmt + lint gate. Fails on an unformatted tree -- the `style: nix fmt the
         # tree` commit is what makes it green (drop that commit and this goes red).
         formatting = treefmtEval.config.build.check self;
