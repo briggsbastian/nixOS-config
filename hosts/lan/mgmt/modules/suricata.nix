@@ -234,17 +234,47 @@ in
     }
   '';
 
+  # `> 0` over every alert made this permanently on the moment the pipeline
+  # started working. Measured across 30 minutes of steady state once the engine
+  # and the tail were both fixed: 109 alerts, and not one of them actionable.
+  #
+  #   98  ET INFO ...            Discord DNS, Spotify P2P, DNS-over-HTTPS
+  #   11  SURICATA HTTP Request abnormal Content-Encoding header
+  #
+  # Two exclusions, each on a line the ruleset authors drew themselves rather
+  # than one invented here:
+  #
+  #   ET INFO                          Emerging Threats' own prefix for
+  #                                    informational signatures. It means "this
+  #                                    is context, not a finding".
+  #   Generic Protocol Command Decode  suricata's own classtype for decoder and
+  #                                    protocol-anomaly diagnostics. Same class
+  #                                    as sid 2200121, already disabled above
+  #                                    for the same reason.
+  #
+  # Deliberately NOT filtered on severity. That was the obvious move and it is
+  # wrong here: measured on this network, every severity-1 alert came from
+  # pawpatrules rating multicast DNS as high. Severity is only as good as the
+  # ruleset setting it, and the one setting it has since been removed.
+  #
+  # The honest cost: an ET INFO signature occasionally carries real weight, and
+  # protocol anomalies can be genuine abuse. This trades some completeness for a
+  # channel that means something when it fires. Nothing is discarded - every
+  # event is still in Loki and still queryable. Only the page is filtered.
+  #
+  # Verified: over the same 30-minute steady-state window this expression
+  # returns nothing. It goes quiet until something crosses the line.
   environment.etc."loki/rules/fake/suricata-alerts.yaml".text = ''
     groups:
       - name: suricata
         rules:
           - alert: SuricataAlert
             expr: |
-              sum by (host) (count_over_time({job="suricata"} | json | event_type="alert" [5m])) > 0
+              sum by (host) (count_over_time({job="suricata"} | json | event_type="alert" | alert_signature !~ `ET INFO.*` | alert_category != `Generic Protocol Command Decode` [5m])) > 0
             for: 0m
             labels: { severity: warning }
             annotations:
               summary: "Suricata IDS alert on {{ $labels.host }}"
-              description: "{{ $value }} Suricata alert(s) in the last 5m on {{ $labels.host }}"
+              description: "{{ $value }} actionable Suricata alert(s) in the last 5m on {{ $labels.host }}. Informational (ET INFO) and protocol-decode events are excluded from this alert but are still in Loki under {job=\"suricata\"}."
   '';
 }
