@@ -20,6 +20,37 @@
   # ---------- NAS mount ----------
   boot.supportedFilesystems = [ "nfs" ];
 
+  # network-online.target is reached before a route to the NAS actually exists.
+  # Measured on the 2026-07-25 reboot: online at 18.13s, mount attempted at
+  # 18.39s, failed with ENETUNREACH - which mount.nfs treats as fatal and does
+  # NOT retry, unlike a timeout. Every service with RequiresMountsFor=/mnt/media
+  # then had its start job cancelled ('result: dependency'), and because a
+  # cancelled job is not a failed service, Restart= cannot bring them back. The
+  # whole *arr stack stayed down until something touched the mountpoint two
+  # minutes later and the automount quietly succeeded.
+  #
+  # So wait for the NAS to actually answer before letting the mount be attempted.
+  systemd.services.wait-for-nas = {
+    description = "Wait until the NAS answers before mounting /mnt/media";
+    serviceConfig = {
+      Type = "oneshot";
+      RemainAfterExit = true;
+    };
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    path = [ pkgs.iputils ];
+    script = ''
+      for _ in $(seq 1 60); do
+        if ping -c1 -W1 192.168.1.213 >/dev/null 2>&1; then
+          exit 0
+        fi
+        sleep 1
+      done
+      echo "NAS 192.168.1.213 did not answer within 60s" >&2
+      exit 1
+    '';
+  };
+
   fileSystems."/mnt/media" = {
     device = "192.168.1.213:/srv/media";
     fsType = "nfs";
@@ -30,6 +61,10 @@
       "nofail"
       "x-systemd.automount"
       "_netdev"
+      # See wait-for-nas above: _netdev alone orders after network-online.target,
+      # which is not the same thing as the NAS being reachable.
+      "x-systemd.requires=wait-for-nas.service"
+      "x-systemd.after=wait-for-nas.service"
     ];
   };
 
