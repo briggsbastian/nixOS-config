@@ -239,6 +239,62 @@ in
                 annotations:
                   summary: "Multiple failed sudo attempts on {{ $labels.host }}"
                   description: "{{ $value }} failed sudo attempts in 10m on {{ $labels.host }}"
+
+          - name: reliability
+            rules:
+              # Covers the blind spot in Prometheus' SystemdUnitFailed, which is
+              # `node_systemd_unit_state{state="failed"} == 1`. A unit with
+              # Restart=on-failure never settles in `failed` - it cycles through
+              # `activating` and back, so that alert can NEVER fire for it.
+              #
+              # Found by suricata.service on mgmt: Restart=on-failure with
+              # RestartUSec=100ms, 173 restarts, crash-looping since 2026-07-17,
+              # ~78 failures every 15 minutes. Eight days with the IDS dead, no
+              # alert, and SuricataAlert silently waiting on events that could
+              # never arrive because the thing producing them was not running.
+              #
+              # unit="init.scope" is load-bearing twice over:
+              #
+              #   1. systemd (PID 1) emits these lines, so `_SYSTEMD_UNIT` is
+              #      `init.scope` - NOT the unit that failed. The failing unit is
+              #      in journald's `UNIT` field, which the relabel config above
+              #      deliberately does not map (see the cardinality note at the
+              #      loki.relabel block). So it is extracted at query time into
+              #      `failed_unit` instead, keeping stream labels unchanged.
+              #
+              #   2. It gives this rule the self-reference immunity that
+              #      SudoFailure had to bolt on. Loki's ruler logs every query it
+              #      runs, verbatim, to the journal, and Alloy ships that back
+              #      into Loki - so this rule's own evaluation log contains
+              #      `Failed with result`. Those lines come from loki.service, so
+              #      the init.scope selector excludes them by construction rather
+              #      than by an exclusion that has to be remembered.
+              #      (If loki.service itself crash-looped, PID 1 would log it
+              #      under init.scope and this rule would be correct to fire -
+              #      though Loki being down, it could not.)
+              #
+              # `> 5 in 15m` separates a crash loop from deploy noise. A NixOS
+              # activation restarts mnt-media.mount and everything with
+              # RequiresMountsFor on it, so jellyfin/nzbget/mnt-media/lxcfs each
+              # log exactly ONE failure per deploy. Measured over 7 days of real
+              # journal history, this threshold fires for exactly two series -
+              # suricata (the crash loop) and grafana (a genuine incident) - and
+              # for zero deploy artefacts. A `> 0 in 24h` version was tried first
+              # and would have raised four false alerts on every single deploy,
+              # which is the cry-wolf failure this estate already made once.
+              #
+              # Deliberately NOT a general "unit failed recently" rule. Prometheus
+              # already covers a unit that stays failed, and it works - it caught
+              # recyclarr and fired correctly for ten days. This covers only what
+              # that structurally cannot see.
+              - alert: SystemdUnitCrashLooping
+                expr: |
+                  sum by (host, failed_unit) (count_over_time({job="systemd-journal", unit="init.scope"} |= `Failed with result` | regexp `(?P<failed_unit>\S+): Failed with result` [15m])) > 5
+                for: 5m
+                labels: { severity: warning }
+                annotations:
+                  summary: "{{ $labels.failed_unit }} is crash-looping on {{ $labels.host }}"
+                  description: "{{ $labels.failed_unit }} failed {{ $value }} times in 15m on {{ $labels.host }}. A restarting unit never enters `failed` state, so SystemdUnitFailed cannot see this."
       '';
 
       # Alertmanager -> the ntfy bridge. additive under the existing prometheus.
