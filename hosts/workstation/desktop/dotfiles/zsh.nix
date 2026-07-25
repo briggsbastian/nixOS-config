@@ -28,6 +28,10 @@ _: {
       # Back-compat with old alias names.
       update-kde = "/etc/nixos/hosts/workstation/desktop/scripts/upgrade.sh kde";
 
+      # One-shot boot into Windows: next reboot only, then back to the GRUB
+      # default. 0000 is the firmware's "Windows Boot Manager" entry (efibootmgr).
+      reboot-windows = "sudo efibootmgr --bootnext 0000 && sudo reboot";
+
       ls = "lsd";
 
       # playground (security lab host): quick shell + HTB VPN control from the

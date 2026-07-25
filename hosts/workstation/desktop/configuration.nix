@@ -12,9 +12,27 @@
     ./udev.nix
     ../../../modules/internal-ca.nix # trust mgmt's step-ca root so *.mgmt.lan TLS verifies
   ];
-  # Bootloader.
-  boot.loader.systemd-boot.enable = true;
+  # Bootloader: GRUB (EFI). systemd-boot can't show Windows when it lives on the
+  # other NVMe's own ESP; GRUB chainloads it, and gets us a themed menu.
+  # The old systemd-boot install stays on the ESP as a firmware-menu fallback.
   boot.loader.efi.canTouchEfiVariables = true;
+  boot.loader.grub = {
+    enable = true;
+    device = "nodev"; # EFI: no MBR device; grub-install goes to the ESP
+    efiSupport = true;
+    configurationLimit = 15; # menu entries only; older generations still roll back via nix
+    theme = pkgs.catppuccin-grub;
+    gfxmodeEfi = "1920x1080"; # theme renders at 640x480 without an explicit mode
+    extraEntries = ''
+      menuentry "Windows" --class windows {
+        insmod part_gpt
+        insmod fat
+        insmod chain
+        search --no-floppy --fs-uuid --set=root A89D-31B8
+        chainloader /EFI/Microsoft/Boot/bootmgfw.efi
+      }
+    '';
+  };
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
   # Configure network proxy if necessary
@@ -35,6 +53,8 @@
   alcove.internalCa.enable = true;
 
   time.timeZone = "America/Los_Angeles";
+  # Windows keeps the RTC in local time; match it so the clock survives dual-boot.
+  time.hardwareClockInLocalTime = true;
   # Select internationalisation properties.
   i18n.defaultLocale = "en_US.UTF-8";
   i18n.extraLocaleSettings = {
@@ -53,6 +73,10 @@
   # Enable the KDE Plasma Desktop Environment.
   services.displayManager.sddm.enable = true;
   services.desktopManager.plasma6.enable = true;
+  # Also offer the Hyprland "rice" session at the SDDM login screen. This pulls
+  # in the Wayland session entry and xdg-desktop-portal-hyprland; the per-user
+  # rice config lives in home-hypr.nix (the `nixos-hypr` flake target).
+  programs.hyprland.enable = true;
   # Configure keymap in X11
   services.xserver.xkb = {
     layout = "us";

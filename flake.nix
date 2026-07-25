@@ -102,6 +102,11 @@
             {
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
+              # On activation, move any pre-existing unmanaged file that HM wants
+              # to own to <file>.hm-bak instead of aborting the whole switch. The
+              # rice's hyprland.conf / GTK files collide with hand-written and
+              # Plasma-written ones on first switch; this lets HM take them over.
+              home-manager.backupFileExtension = "hm-bak";
               home-manager.extraSpecialArgs = { inherit inputs; };
               home-manager.users.briggs = import homeFile;
             }
@@ -235,6 +240,7 @@
     {
       nixosConfigurations = {
         nixos-kde = mkSystem { homeFile = ./hosts/workstation/desktop/home-kde.nix; };
+        nixos-hypr = mkSystem { homeFile = ./hosts/workstation/desktop/home-hypr.nix; };
         mgmt = mkMgmtSystem;
       }
       // nixpkgs.lib.mapAttrs mkServerSystem servers;

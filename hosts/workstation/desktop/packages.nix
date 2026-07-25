@@ -17,6 +17,10 @@
     btop
     fzf
     #tools
+    sops # edit /etc/nixos secrets: `sops secrets/<host>.yaml`
+    age
+    ssh-to-age
+    efibootmgr # one-shot boot into Windows: see reboot-windows alias in zsh.nix
     obs-studio
     obsidian
     # python3 + psutil/pywinctl/typing-extensions: PTY backend for the Obsidian "Terminal" plugin
@@ -32,6 +36,7 @@
     proton-vpn
     eddie
     reaper
+    bitwig-studio
     vlc
     spotify
     blender
