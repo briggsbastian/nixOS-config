@@ -10,6 +10,7 @@
   # metrics.nix adds a mgmt-only node_exporter to every fleet host (cloud1 opts
   # out; mgmt runs its own, localhost-bound).
   imports = [
+    ./config-revision.nix
     ./deploy-user.nix
     ./metrics.nix
   ];

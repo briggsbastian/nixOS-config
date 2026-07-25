@@ -24,6 +24,9 @@ let
   # world-readable: node-exporter (fixed system user, see node.nix) only needs
   # read access; writers (mgmt-backup.service, root) write+rename atomically.
   textfileDir = "/var/lib/node-exporter-textfile";
+  # Forgejo lives on this host, so the authoritative main revision is readable
+  # straight off disk. Forgejo lowercases repository directory names.
+  fleetRepoGitDir = "/var/lib/forgejo/repositories/briggs/nixos-config.git";
   nasIp = "192.168.1.213";
   acmeVhosts = lib.attrNames (
     lib.filterAttrs (_: v: v.enableACME) config.services.nginx.virtualHosts
@@ -328,6 +331,33 @@ in
               # run (backup.nix); daily at 03:30, so 26h gives >1h grace before
               # paging. Absent metric (never run, or textfile dir wiped) counts
               # as stale via the `or` clause instead of going silent.
+              # A host running something other than main. Covers both "behind"
+              # (an older sha) and "built from a dirty tree" (<sha>-dirty, which
+              # can never match) - the second is arguably the more important of
+              # the two, and is exactly what went unnoticed for six days.
+              # 6h of grace so a deploy window doesn't page.
+              - alert: HostConfigDrift
+                expr: |
+                  nixos_configuration_revision_info unless on (revision) fleet_expected_revision_info
+                for: 6h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "{{ $labels.instance }} is not running main"
+                  description: "{{ $labels.instance }} was built from revision {{ $labels.revision }}, which is not the current main. Either it is behind, or it was deployed from an uncommitted tree."
+
+              # Activated but not rebooted: the running kernel and initrd are
+              # from the previous configuration, so any kernel fix in the new
+              # one is not actually in effect.
+              - alert: HostRebootPending
+                expr: nixos_reboot_pending == 1
+                for: 24h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "{{ $labels.instance }} has a configuration activated but not booted"
+                  description: "{{ $labels.instance }} activated a new configuration more than 24h ago without rebooting - the kernel and initrd in use are still the previous ones."
+
               - alert: BackupStale
                 expr: |
                   (time() - mgmt_backup_last_success_timestamp_seconds > 26 * 3600)
@@ -405,6 +435,42 @@ in
   systemd.services.grafana.serviceConfig = {
     StateDirectory = "grafana";
     StateDirectoryMode = "0700";
+  };
+
+  # --- Expected fleet revision -------------------------------------------
+  # What every host *should* be running, read straight off Forgejo's bare repo
+  # on this same box - no network, no token, no key. Paired with
+  # nixos_configuration_revision_info from modules/config-revision.nix, the
+  # HostConfigDrift alert below is the whole always-on drift detector.
+  systemd.services.fleet-expected-revision = {
+    description = "Publish the fleet's expected config revision as a Prometheus metric";
+    serviceConfig.Type = "oneshot";
+    path = [
+      pkgs.git
+      pkgs.coreutils
+    ];
+    script = ''
+      set -euo pipefail
+      rev=$(git --git-dir=${fleetRepoGitDir} rev-parse refs/heads/main)
+      tmp=$(mktemp "${textfileDir}/.fleet_expected_revision.XXXXXX")
+      {
+        echo '# HELP fleet_expected_revision_info Revision of main in the config repo - what every host should be running.'
+        echo '# TYPE fleet_expected_revision_info gauge'
+        echo "fleet_expected_revision_info{revision=\"$rev\"} 1"
+      } > "$tmp"
+      chmod 0644 "$tmp"
+      mv "$tmp" "${textfileDir}/fleet_expected_revision.prom"
+    '';
+  };
+
+  systemd.timers.fleet-expected-revision = {
+    description = "Refresh the fleet's expected config revision";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnBootSec = "2m";
+      OnUnitActiveSec = "5m"; # main moves when a PR merges, not often
+      Persistent = true;
+    };
   };
 
   services.uptime-kuma = {

@@ -241,6 +241,7 @@
       # identity. Built against its pinned nixpkgs for a churn-free cut.
       mgmtModules = [
         (mkVersionInfo nixpkgs-mgmt) # mgmt's own pin, not nixpkgs-stable
+        ./modules/config-revision.nix # mgmt skips common.nix, so import it directly
         ./modules/deploy-user.nix
         sops-nix.nixosModules.sops # mgmt needs sops (Grafana admin password)
         ./modules/siem-lite.nix # mgmt is the central Loki/Grafana/Alertmanager server

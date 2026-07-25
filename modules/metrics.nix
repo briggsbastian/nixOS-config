@@ -43,7 +43,11 @@ in
       enable = true;
       listenAddress = "0.0.0.0"; # reachable by mgmt; locked down by the firewall below
       port = nodePort;
-      enabledCollectors = [ "systemd" ]; # unit states feed the "systemd unit failed" alert on mgmt
+      enabledCollectors = [
+        "systemd" # unit states feed the "systemd unit failed" alert on mgmt
+        "textfile" # config-revision.nix drops the built-from revision here
+      ];
+      extraFlags = [ "--collector.textfile.directory=${config.alcove.configRevision.textfileDir}" ];
     };
 
     # Open :9100 to mgmt's IP only. Reuses the LAN-scoped nftables pattern
