@@ -356,14 +356,17 @@ in
   # A real key now comes from sops. Rotating it makes any pre-existing encrypted
   # DB values unreadable, which is why /var/lib/grafana/grafana.db has to be reset
   # once by hand alongside this change - see MAINTENANCE.md.
-  sops.secrets.grafana_secret_key = {
+  # Name must match the key in secrets/mgmt.yaml exactly - sops-nix looks it up
+  # by attribute name, and a mismatch fails activation with the secret simply
+  # never appearing under /run/secrets.
+  sops.secrets.grafana_key = {
     sopsFile = ../../../../secrets/mgmt.yaml;
     owner = "grafana";
   };
 
   services.grafana = {
     enable = true;
-    settings.security.secret_key = "$__file{${config.sops.secrets.grafana_secret_key.path}}";
+    settings.security.secret_key = "$__file{${config.sops.secrets.grafana_key.path}}";
     settings.server = {
       http_addr = "127.0.0.1";
       http_port = 3002;
