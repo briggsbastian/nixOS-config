@@ -108,14 +108,24 @@ briefly pinned to upstream's old public default during the 26.05 upgrade; see th
 comment in `hosts/lan/mgmt/modules/monitoring.nix` for why that is gone.
 
 **Rotating `secret_key` makes every previously encrypted DB value unreadable.**
-Grafana has no supported in-place rotation, so a rotation means resetting the DB:
+Grafana has no supported in-place rotation, so a rotation means resetting state.
+
+Move the **whole state directory**, not just `grafana.db`. Grafana 13 keeps
+unified-storage state in `/var/lib/grafana/data/` as well, and a fresh
+`grafana.db` beside a stale `data/` leaves the two stores disagreeing — which
+surfaces as `Datasource provisioning error: data source not found`, i.e. exactly
+the failure you were trying to clear:
 
 ```sh
 ssh mgmt
 sudo systemctl stop grafana
-sudo mv /var/lib/grafana/grafana.db /var/lib/grafana/grafana.db.bak-$(date +%F)
-# then deploy, which starts Grafana on a fresh DB and re-provisions from the flake
+sudo mv /var/lib/grafana /var/lib/grafana.bak-$(date +%F-%H%M)
+sudo systemctl start grafana        # start it by hand first; faster to diagnose
+                                    # than a 40s colmena round trip
 ```
+
+`grafana-pre-start` recreates the `conf` and `tools` symlinks, and `plugins`
+re-downloads, so the directory rebuilds itself.
 
 Nothing of value is lost by this: datasources, dashboards and alert rules are all
 provisioned declaratively from the flake. What *is* lost is anything created
