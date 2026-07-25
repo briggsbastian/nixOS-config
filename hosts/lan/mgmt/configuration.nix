@@ -9,7 +9,9 @@
     ./modules/adguard.nix
     ./modules/nginx.nix
     ./modules/monitoring.nix
-    ./modules/netbox.nix
+    # ./modules/netbox.nix  # deferred until the Incus VMs are up (needs
+    # secrets/mgmt.yaml's netbox_api_token_pepper set first); re-add + `sops
+    # secrets/mgmt.yaml` to add that key when NetBox is actually being set up.
     ./modules/forgejo.nix
     ./modules/ntopng.nix
     ./modules/harmonia.nix
