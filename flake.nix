@@ -194,6 +194,7 @@
         ./modules/common.nix
         ./modules/internal-ca.nix
         ./modules/siem-lite.nix
+        ./modules/audit.nix # inert unless the host sets alcove.audit.enable
         sops-nix.nixosModules.sops
         inputs.disko.nixosModules.disko # inert unless the host sets disko.devices (only cloud1 does)
         ./hosts/${meta.zone}/${name}/configuration.nix
@@ -275,6 +276,7 @@
         ./modules/deploy-user.nix
         sops-nix.nixosModules.sops # mgmt needs sops (Grafana admin password)
         ./modules/siem-lite.nix # mgmt is the central Loki/Grafana/Alertmanager server
+        ./modules/audit.nix # inert unless the host sets alcove.audit.enable
         ./hosts/lan/mgmt/configuration.nix
       ];
       mkMgmtSystem = nixpkgs-mgmt.lib.nixosSystem {
@@ -330,6 +332,10 @@
         # Guards a real outage: the backup aborted whenever an optional source
         # path was absent, so step-ca's only off-box copy was never written.
         mgmt-backup = import ./tests/mgmt-backup.nix { inherit pkgs; };
+        # Audit telemetry is exactly the class of thing that configures cleanly,
+        # reports healthy and is connected to nothing. Asserts runtime behaviour
+        # only: rules loaded, events emitted, journald actually receiving them.
+        audit = import ./tests/audit.nix { inherit pkgs; };
         # fmt + lint gate. Fails on an unformatted tree -- the `style: nix fmt the
         # tree` commit is what makes it green (drop that commit and this goes red).
         formatting = treefmtEval.config.build.check self;

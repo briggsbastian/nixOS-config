@@ -8,7 +8,7 @@
 # old AllTheMons-datapack-on-Cobblemon setup this replaced. Server side is
 # fully declarative: nix-minecraft's offline NeoForge launcher plus the
 # pack's official ServerFiles zip, unpacked into pinned store paths. Clients
-# must run the matching "All the Mons 1.0.1" pack from the CurseForge app -
+# must run the matching "All the Mons 1.1.1" pack from the CurseForge app -
 # a vanilla/Fabric client can no longer join.
 #
 # The old Fabric world is preserved at /srv/minecraft/allthemons on hacktop;
@@ -16,7 +16,7 @@
 #
 # The ServerFiles zip is ~1 GB. The mediafilez URL is CurseForge's stable
 # CDN; to avoid re-downloading when the store path gets GC'd, pre-seed from
-# a local copy with: nix-store --add-fixed sha256 ServerFiles-1.0.1.zip
+# a local copy with: nix-store --add-fixed sha256 ServerFiles-1.1.1.zip
 {
   config,
   pkgs,
@@ -27,9 +27,9 @@
 
 let
   serverFiles = pkgs.fetchurl {
-    # "All the Mons - ATMons" project 1356598, server pack file 8360747
-    url = "https://mediafilez.forgecdn.net/files/8360/747/ServerFiles-1.0.1.zip";
-    hash = "sha256-FXK/iFkcwAJJwnZTnzvmzvKb9a8YM6KZfpJjPHxtLck=";
+    # "All the Mons - ATMons" project 1356598, server pack file 8431025
+    url = "https://mediafilez.forgecdn.net/files/8431/25/ServerFiles-1.1.1.zip";
+    hash = "sha256-3+mw6yldX6EPTwBNTZqVbINnM0r24b583wb8FPYhxaQ=";
   };
 
   # Unpack once at build time; the zip has no top-level directory. Only the
@@ -37,7 +37,7 @@ let
   # are replaced by nix-minecraft's offline launcher.
   serverPack = pkgs.stdenvNoCC.mkDerivation {
     pname = "atmons-server-pack";
-    version = "1.0.1";
+    version = "1.1.1";
     src = serverFiles;
     nativeBuildInputs = [ pkgs.unzip ];
     sourceRoot = ".";
