@@ -24,6 +24,13 @@
     ./modules/suricata.nix
   ];
 
+  # Audit telemetry. mgmt holds every credential on the estate - step-ca's CA
+  # key, the sops age key, Forgejo, the Grafana admin password - so a change to
+  # who can log in, or who is in which group, matters more here than anywhere
+  # else. See modules/audit.nix for why this is the kernel subsystem rather
+  # than the auditd daemon, and why there is no blanket execve rule.
+  alcove.audit.enable = true;
+
   boot.loader.grub.enable = true;
   boot.loader.grub.device = "/dev/sda";
 

@@ -21,6 +21,12 @@
 
   networking.hostName = "cloud1";
 
+  # Audit telemetry. cloud1 is the only host on this estate with a public IP,
+  # so it is the only one an unauthenticated stranger can reach at all. Its
+  # fork rate is also a fifth of mgmt's (~21,600/day vs ~97,200), which leaves
+  # more headroom here than anywhere else if execve auditing is ever scoped in.
+  alcove.audit.enable = true;
+
   # --- Boot: legacy BIOS + GRUB on the disk ---------------------------------
   # Linode boots BIOS, and disko gives a GPT disk with a 1 MiB BIOS-boot partition,
   # so GRUB embeds onto /dev/sda. (UEFI hosts like hacktop use systemd-boot + ESP.)
