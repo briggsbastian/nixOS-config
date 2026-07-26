@@ -26,6 +26,45 @@ let
     else
       cfg.lokiEndpoint;
 
+  # Noise filter, inserted between the journal source and loki.write. When the
+  # drop list is empty the component is omitted entirely and the source writes
+  # direct, so an empty list is genuinely a no-op rather than an always-false
+  # matcher sitting in the path.
+  dropUnits = cfg.agent.dropInfoFrom;
+  journalSink =
+    if dropUnits == [ ] then "loki.write.default.receiver" else "loki.process.drop_noise.receiver";
+  dropNoiseComponent = lib.optionalString (dropUnits != [ ]) ''
+
+    // Selector is LogQL over the labels the relabel rules above have already
+    // applied, so `unit` and `level` are both set by the time a line reaches
+    // here.
+    //
+    // The dots are deliberately NOT escaped. Escaping them is the obvious
+    // instinct - =~ is a full RE2 match, so a bare `.` is a wildcard - but it
+    // silently breaks the filter. There are three unquoting layers here (Nix
+    // emits the file, Alloy unquotes the selector string, LogQL unquotes the
+    // matcher value), and a `\\.` in this file arrives at LogQL as `\.`.
+    // Measured against the live Loki:
+    //
+    //     {unit=~"nzbget\.service|...", level="info"}   ->  0 results, NO ERROR
+    //     {unit=~"nzbget\\.service|...", level="info"}  ->  6869
+    //     {unit=~"nzbget.service|...", level="info"}    ->  6869
+    //
+    // So the escaped form drops nothing at all, and `alloy validate` passes it
+    // happily because the syntax is fine. Getting the escaping "right" would
+    // mean writing four backslashes here and hoping the next person counts
+    // correctly. The wildcard can only over-match unit names that do not
+    // exist, which is a smaller risk than a filter that silently does nothing.
+    loki.process "drop_noise" {
+      forward_to = [loki.write.default.receiver]
+
+      stage.match {
+        selector = "{unit=~\"${lib.concatStringsSep "|" dropUnits}\", level=\"info\"}"
+        action   = "drop"
+      }
+    }
+  '';
+
   # journal -> Loki. labels stay unit/host/level only (cardinality)
   alloyConfigText = ''
     loki.write "default" {
@@ -57,11 +96,12 @@ let
     loki.source.journal "system" {
       // __journal_* fields are only visible to relabel_rules here; a downstream
       // loki.relabel component never sees them (the source strips them first).
-      forward_to    = [loki.write.default.receiver]
+      forward_to    = [${journalSink}]
       relabel_rules = loki.relabel.journal.rules
       labels        = { job = "systemd-journal" }
       max_age       = "12h"
     }
+    ${dropNoiseComponent}
   '';
 
   # points the grafana cli at the server's real db for the password reset below
@@ -83,6 +123,31 @@ in
         Extra Alloy config appended after the built-in journal source (e.g. an
         extra loki.source.file component). Must forward_to
         [loki.write.default.receiver] like the built-in journal pipeline does.
+      '';
+    };
+
+    agent.dropInfoFrom = lib.mkOption {
+      type = lib.types.listOf lib.types.str;
+      default = [
+        "nzbget.service"
+        "loki.service"
+      ];
+      description = ''
+        Units whose `info`-level journal lines are dropped at the agent, before
+        anything is shipped. Higher levels from the same units are always kept.
+
+        Measured over 24h before this existed: 345,569 journal lines fleet-wide,
+        of which nzbget contributed 144,766 and loki 134,605 - 81% of everything
+        - and every single one of those was level=info. Zero warnings, zero
+        errors. Loki logging 134k lines a day about itself, into itself.
+
+        Dropped at the agent rather than by Loki retention because volume that
+        is never shipped costs no network, no storage and no index.
+
+        Scoped by unit AND level rather than by level alone, because sshd is
+        100% info too: 719 lines in the same 24h, every one of them an auth
+        event. A blanket info filter would delete the single most useful
+        security source on the estate to remove chatter from a Usenet client.
       '';
     };
 
@@ -134,6 +199,18 @@ in
       services.alloy.enable = true;
       services.alloy.configPath = "/etc/alloy/config.alloy";
       environment.etc."alloy/config.alloy".text = alloyConfigText;
+
+      # Alloy is invoked with a stable path (/etc/alloy/config.alloy), not a
+      # store path, so changing the config changes NOTHING about the unit and
+      # switch-to-configuration has no reason to restart it. The new config
+      # lands on disk and the running process keeps the old one.
+      #
+      # This exact shape has now bitten three times: suricata's ruleset, alloy's
+      # eve.json tail, and this. Anywhere a service reads state that Nix writes
+      # to a fixed path, the unit needs an explicit trigger or the deploy is
+      # cosmetic. Triggering on the config text itself means any change to the
+      # pipeline - drop rules, extraConfig, endpoint - restarts the agent.
+      systemd.services.alloy.restartTriggers = [ alloyConfigText ];
 
       # needs the systemd-journal group to read the full journal
       systemd.services.alloy.serviceConfig.SupplementaryGroups = [ "systemd-journal" ];
