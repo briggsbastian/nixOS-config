@@ -13,7 +13,6 @@ a server, the next deploy reverts it. The only on-box state is under [Backups](#
 |---|---|---|---|
 | mgmt (.222) | DNS / PKI / monitoring | `--on mgmt` | Critical: runs the LAN's DNS and PKI. Pinned nixpkgs, deploy deliberately. |
 | media (.189) | Jellyfin + *arr + Kavita | `--on media` | Needs the NAS NFS mount (192.168.1.213). |
-| playground (.217) | Incus lab | `--on playground` | Single NIC on a `br0` bridge; network changes need care. |
 | hacktop (.26) | staging / CI / Minecraft | `--on hacktop` | Wired (`lan0`, USB-C dongle @1G); Wi-Fi stays connected as fallback on .241. |
 | desktop | desktop + control node | `rebuild-kde` | Not a Colmena target; rebuilds itself. |
 
@@ -241,7 +240,7 @@ sudo nixos-rebuild switch --rollback   # on the host (needs root/console)
 
 Or pick the previous generation at the boot menu. A `test` activation never changes
 the boot default, so a power-cycle reverts it; that's the safe way to trial risky
-changes on hacktop/playground, which are hard to recover remotely.
+changes on hacktop, which is hard to recover remotely.
 
 ## Adding a host
 

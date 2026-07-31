@@ -1,4 +1,11 @@
-# hosts/lan/playground/decepticon.nix
+# attic/decepticon.nix - INERT. Imported by no host; see ./README.md.
+#
+# Was hosts/lan/playground/decepticon.nix until playground was re-imaged with
+# stock Proxmox VE and dropped out of the flake. Kept because the substrate
+# reasoning below is the hard-won part and is worth re-reading before standing
+# Decepticon back up. To revive it: re-home this into a Proxmox guest, drop the
+# ../../../modules/common.nix assumption, and restore the `decep` driver that
+# used to live in hosts/workstation/desktop/dotfiles/zsh.nix (see git history).
 #
 # Decepticon - PurpleAILAB's autonomous red-team agent (https://github.com/PurpleAILAB/Decepticon).
 # Apache-2.0. It is a Docker Compose v2 orchestrator: a Python/LangGraph CLI that
@@ -11,10 +18,10 @@
 #
 # So this module declares only the *substrate* - Docker + Compose + the build
 # toolchain - and Decepticon runs from a source checkout on top of it, the same
-# way upstream's `make dogfood` flow expects. Lives on playground because that is
-# the fleet's security-lab host (Incus Kali lab; see ./configuration.nix
-# and Project 1). Baseline is in ../../../modules/common.nix. HTB VPN connectivity
-# lives separately in ./htb.nix.
+# way upstream's `make dogfood` flow expects. It lived on playground because that
+# was the fleet's security-lab host (Incus Kali lab), and took its baseline from
+# modules/common.nix. HTB VPN connectivity lived separately in htb.nix, which was
+# dropped outright in the same change - HTB hands out fresh .ovpn files on demand.
 #
 # RUN IT IN THE FOREGROUND - NOT TMUX. Earlier revisions of this module wrapped
 # the launcher in a detached tmux session for attach/detach convenience. That

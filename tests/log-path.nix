@@ -7,8 +7,8 @@
 # shipping logs and you only notice when you go looking for a log that isn't there.
 #
 # It imports the SAME modules/siem-lite.nix the real hosts use and enables the
-# real agent role (alcove.siemLite.agent.enable, exactly what media / playground /
-# hacktop set), only redirecting the push endpoint at an in-test Loki on the same
+# real agent role (alcove.siemLite.agent.enable, exactly what media and hacktop
+# set), only redirecting the push endpoint at an in-test Loki on the same
 # node instead of mgmt. Single node, no network, no real hosts.
 { pkgs, ... }:
 

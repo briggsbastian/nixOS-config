@@ -45,8 +45,7 @@
     {
       key: "lab", label: "Lab", color: "#39ff9d",
       services: [
-        { name: "Guacamole", desc: "Browser remote-desktop gateway (RDP/VNC/SSH)", href: "http://192.168.1.217:8080/guacamole/" },
-        { name: "Cockpit", desc: "playground libvirt VMs - power/console + host health", href: "https://cockpit.mgmt.lan" },
+        { name: "Proxmox VE", desc: "playground VM lab - Kali + REMnux, web UI and SPICE consoles", href: "https://192.168.1.217:8006" },
       ],
     },
     {

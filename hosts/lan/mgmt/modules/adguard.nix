@@ -39,8 +39,10 @@ _:
           answer = "192.168.1.222";
           enabled = true;
         }
-        # playground is a separate host (.217); exact name beats the
-        # *.mgmt.lan wildcard, so it resolves to the box not mgmt.
+        # playground is a separate box (.217); exact name beats the
+        # *.mgmt.lan wildcard, so it resolves to the box not mgmt. Kept after the
+        # 2026-07-31 re-image even though playground left the flake - it runs
+        # stock Proxmox VE now, but it is still the same name at the same address.
         {
           domain = "playground.mgmt.lan";
           answer = "192.168.1.217";

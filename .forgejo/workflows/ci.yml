@@ -56,7 +56,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        host: [cloud1, hacktop, media, mgmt, nixos-kde, playground]
+        host: [cloud1, hacktop, media, mgmt, nixos-kde]
     steps:
       - uses: actions/checkout@v4
       - name: build ${{ matrix.host }}

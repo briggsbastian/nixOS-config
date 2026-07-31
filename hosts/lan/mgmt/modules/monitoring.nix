@@ -677,12 +677,15 @@ in
       }
       {
         "Lab" = [
-          # Direct IP on purpose: the Incus UI authenticates with TLS client
-          # certs, which nginx can't proxy (see hosts/lan/playground/incus.nix).
+          # Direct IP on purpose: playground is not a NixOS host any more (stock
+          # Proxmox VE since 2026-07-31), so it has no ACME cert from our step-ca
+          # and no nginx vhost here. Its self-signed cert would fail a proxied
+          # upstream check anyway. playground.mgmt.lan resolves to .217 (see
+          # ./adguard.nix) if you prefer the name.
           {
-            "Incus" = {
-              href = "https://192.168.1.217:8443";
-              description = "playground VM/container lab - UI + console (client-cert auth)";
+            "Proxmox VE" = {
+              href = "https://192.168.1.217:8006";
+              description = "playground VM lab - Kali + REMnux, web UI and SPICE consoles";
             };
           }
         ];

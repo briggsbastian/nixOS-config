@@ -14,7 +14,6 @@ keys:
   - &admin        age16xrzea59hwrrwlccyu924e9ggraz7flgkh3grqpepdf2rhurry8s3hm5df
   - &host_hacktop age18nmznhp790z2236vdc0mqvv9tgpjydhj3weevtmunl4zp7twuygqdac66e
   - &host_media   age1a2mja5xrrn62nckuu8d5yjwxuyhmxmr7v0w438ye33neyj4xrcmsz9rwlt
-  - &host_playground   age1gz2uhnzy9e504kwnqs4mzm9x2hrmq7uql4pq8m9aj77l2364kcash88c62
   - &host_mgmt    age18eq2h82ta0rjyfzhd9d02c6lqun2qtwkqa5mwva76kdeqzlscajqaepyeu
   # derived from the 2026-07-02 nixos-anywhere install's host key; re-key on re-image
   - &host_cloud1  age1ckp25txejnsn8jaf2s03q8nsxkymmf8qd557h449euza6ez5sggqjk3qlq
@@ -31,11 +30,6 @@ creation_rules:
       - age:
           - *admin
           - *host_media
-  - path_regex: secrets/playground\.yaml$
-    key_groups:
-      - age:
-          - *admin
-          - *host_playground
   - path_regex: secrets/mgmt\.yaml$
     key_groups:
       - age:
@@ -54,5 +48,4 @@ creation_rules:
           - *admin
           - *host_hacktop
           - *host_media
-          - *host_playground
           - *host_mgmt

@@ -13,7 +13,6 @@ servers stay on stable (nixos-26.05).
 | desktop | KDE desktop, and the box I deploy from. |
 | mgmt | The LAN's core: AdGuard DNS, an nginx + step-ca reverse proxy, Prometheus/Grafana, a Loki + Alloy log stack with Alertmanager/ntfy alerts, NetBox, Forgejo, a Harmonia cache, and PXE boot. It runs DNS and PKI for the house, so I deploy it carefully. [Details](hosts/lan/mgmt/README.md). |
 | media | Jellyfin, the *arr stack, and Kavita, served off the NAS over NFS. |
-| playground | An Incus security lab (VMs + containers) with its own web UI. |
 | hacktop | Staging, CI builds, and the ATMons Minecraft server. |
 | cloud1 | A Linode VPS, installed with disko + nixos-anywhere. Public front door for the Minecraft server. |
 

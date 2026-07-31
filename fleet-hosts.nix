@@ -42,10 +42,11 @@
     ip = "192.168.1.189";
     scrape = true;
   };
-  playground = {
-    ip = "192.168.1.217";
-    scrape = true;
-  };
+  # playground (192.168.1.217) was removed 2026-07-31 - the box was re-imaged with
+  # stock Proxmox VE and is no longer a NixOS/Colmena host. Its AdGuard rewrite
+  # (playground.mgmt.lan -> .217) is deliberately kept in mgmt's adguard.nix; only
+  # the deploy + scrape membership is gone. Re-add here if you install
+  # node_exporter on the Proxmox host and want it scraped again.
   cloud1 = {
     # recreated 2026-07-02 (terraform apply); IP changes on every recreate
     ip = "172.234.232.185";

@@ -11,14 +11,6 @@
     nixvim = {
       url = "github:nix-community/nixvim";
     };
-    # nixvim's main branch tracks unstable nixpkgs - it maintains release
-    # branches matching nixpkgs channels for exactly this. Used only by
-    # playground (nixpkgs-stable); desktop keeps using the plain `nixvim`
-    # input above, matching its unstable nixpkgs.
-    nixvim-stable = {
-      url = "github:nix-community/nixvim/nixos-26.05";
-      inputs.nixpkgs.follows = "nixpkgs-stable";
-    };
     claude-code = {
       url = "github:sadjow/claude-code-nix";
     };
@@ -228,15 +220,6 @@
             "media"
           ];
         };
-        playground = {
-          zone = "lan";
-          targetHost = fleetHosts.playground.ip;
-          tags = [
-            "server"
-            "lan"
-            "lab"
-          ];
-        };
         cloud1 = {
           zone = "cloud";
           targetHost = fleetHosts.cloud1.ip;
@@ -253,7 +236,7 @@
         name: meta:
         nixpkgs-stable.lib.nixosSystem {
           system = "x86_64-linux";
-          specialArgs = { inherit inputs; }; # lets a host module reach another input (e.g. playground's nixvim-stable + claude-code)
+          specialArgs = { inherit inputs; }; # lets a host module reach another input (e.g. hacktop's nix-minecraft)
           modules = serverModules name meta;
         };
 
@@ -308,7 +291,7 @@
       # --- Remote deploy from this desktop (the Colmena control node) ----------
       #   nix develop                          # shell with colmena + sops/age
       #   colmena build --on media             # build only
-      #   colmena apply --on playground             # build + push + activate (as deploy)
+      #   colmena apply --on media             # build + push + activate (as deploy)
       #   colmena apply --on @server           # everything tagged "server"
       colmenaHive = colmena.lib.makeHive (
         {

@@ -21,6 +21,12 @@
     age
     ssh-to-age
     efibootmgr # one-shot boot into Windows: see reboot-windows alias in zsh.nix
+    # SPICE client for the playground lab guests. This - not the choice of
+    # hypervisor - is what actually makes the Kali/REMnux consoles feel local: a
+    # browser console (noVNC) is websocket-tunnelled VNC and always feels laggy,
+    # while SPICE does client-side cursor, audio and clipboard. Proxmox's console
+    # dropdown hands you a `.vv` file; opening it launches remote-viewer.
+    virt-viewer
     obs-studio
     obsidian
     # python3 + psutil/pywinctl/typing-extensions: PTY backend for the Obsidian "Terminal" plugin

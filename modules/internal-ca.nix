@@ -69,7 +69,7 @@ in
         CA and cache above: no LAN host actually uses AdGuard as its resolver, so
         *.mgmt.lan resolution is incidental rather than designed. Measured
         2026-07-25 - hacktop and media could not resolve alerts.mgmt.lan at all,
-        while mgmt and playground could.
+        while mgmt could.
 
         alerts.mgmt.lan is here so CI on hacktop can read Alertmanager through
         the nginx proxy that already fronts it. Without this, collecting alerts
