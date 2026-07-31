@@ -1,5 +1,26 @@
 {
   "nodes": {
+    "budget-tracker": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs-stable"
+        ]
+      },
+      "locked": {
+        "lastModified": 1785538212,
+        "narHash": "sha256-n0kfY2ksPmSwFxVrojwcxJx4llYR1oBmpOMBlDW27QA=",
+        "ref": "main",
+        "rev": "37cba4843a5bf9d44991289fad028e0ede18a70f",
+        "revCount": 5,
+        "type": "git",
+        "url": "https://git.mgmt.lan/briggs/budget_tracker.git"
+      },
+      "original": {
+        "ref": "main",
+        "type": "git",
+        "url": "https://git.mgmt.lan/briggs/budget_tracker.git"
+      }
+    },
     "claude-code": {
       "inputs": {
         "flake-utils": "flake-utils",
@@ -468,6 +489,7 @@
     },
     "root": {
       "inputs": {
+        "budget-tracker": "budget-tracker",
         "claude-code": "claude-code",
         "claude-desktop": "claude-desktop",
         "colmena": "colmena",
