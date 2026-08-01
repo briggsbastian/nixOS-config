@@ -50,6 +50,14 @@ let
   # trade anyone would choose, and it is precisely what used to happen.
   optionalPaths = [
     "var/backup/postgresql"
+    # budget-tracker's nightly `sqlite3 .backup` snapshot, written at 03:00 -
+    # half an hour before this job. Deliberately the snapshot rather than
+    # var/lib/budget-tracker: that database is in WAL mode, so tarring the .db
+    # without its -wal sidecar captures an incomplete copy and reports success.
+    # Optional, not required - the directory does not exist until the service
+    # has run its first snapshot, and a fresh mgmt must not fail its backup
+    # over that.
+    "var/lib/budget-tracker/backup"
   ];
 in
 {
