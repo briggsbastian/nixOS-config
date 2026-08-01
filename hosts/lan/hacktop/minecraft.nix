@@ -66,6 +66,28 @@ in
       package = pkgs.neoforgeServers.neoforge-1_21_1-21_1_234;
       openFirewall = true; # 25565/tcp - LAN only, hacktop is behind NAT
 
+      # nix-minecraft defaults to tmux, which parks the console in a pane
+      # systemd never sees: `journalctl -u minecraft-server-atmons` showed only
+      # unit start/stop lines and not one line of game output. Since the Alloy
+      # agent ships the journal to Loki, that left the fleet's log stack blind
+      # at its only internet-facing service, and crash traces (see the
+      # CrashAssistant note above) died with the process.
+      #
+      # With systemd-socket the server's stdout/stderr go to the journal and on
+      # to Loki, and console input becomes a line-atomic write to a FIFO rather
+      # than simulated keystrokes. Cost: no `tmux attach`. Read the console with
+      # `journalctl -fu minecraft-server-atmons`, write to it with `mc-console
+      # send` (mc-console.nix).
+      #
+      # NEVER write to the FIFO with a bare `>` redirect: if the socket unit is
+      # down the shell creates a REGULAR FILE at that path, and the socket then
+      # refuses to start, so the server never comes back. mc-console exists
+      # precisely to make that unrepresentable.
+      managementSystem = {
+        tmux.enable = false;
+        systemd-socket.enable = true;
+      };
+
       # Heap bounds match the pack's user_jvm_args.txt; the G1 flags are the
       # pack-shipped (Aikar-style) tuning. 8 GB max still leaves >20 GB for
       # CI builds.
@@ -144,5 +166,10 @@ in
   systemd.services.minecraft-server-atmons.serviceConfig = {
     NoNewPrivileges = true;
     ProtectSystem = "full";
+    # Now that the console goes to the journal, journald's default burst limit
+    # applies to it - and a 371-mod server at boot outruns that easily. Dropped
+    # lines here are dropped crash traces, which is the whole reason for the
+    # switch, so exempt this one unit. Volume is still bounded by SystemMaxUse.
+    LogRateLimitIntervalSec = 0;
   };
 }
