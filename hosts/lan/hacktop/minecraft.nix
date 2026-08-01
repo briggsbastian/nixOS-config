@@ -51,6 +51,27 @@ let
       rm $out/mods/CrashAssistant-neoforge-*.jar
     '';
   };
+
+  # Role policy (ranks.snbt) and the /color command that drives it. Both are
+  # generated from one colour list so the command's arguments and the ranks
+  # backing them cannot drift apart. See those files for the whole rationale.
+  atmonsRanks = import ./atmons-ranks.nix { inherit pkgs lib; };
+  atmonsColor = import ./atmons-color.nix {
+    inherit pkgs lib;
+    inherit (atmonsRanks) colours;
+  };
+
+  # The pack's kubejs/ holds only data/ overrides - no server_scripts at all -
+  # so /color is purely additive. Merged into one store path rather than added
+  # as a second nested `files` entry: that would depend on nix-minecraft
+  # applying "kubejs" before "kubejs/server_scripts/...", which is true today
+  # only because attrset iteration is sorted. This is order-independent.
+  kubejsWithColor = pkgs.runCommand "atmons-kubejs" { } ''
+    mkdir -p $out/server_scripts
+    cp -r ${serverPack}/kubejs/. $out/
+    chmod -R u+w $out
+    cp ${atmonsColor} $out/server_scripts/atmons_color.js
+  '';
 in
 {
   imports = [ inputs.nix-minecraft.nixosModules.minecraft-servers ];
@@ -86,6 +107,18 @@ in
       managementSystem = {
         tmux.enable = false;
         systemd-socket.enable = true;
+      };
+
+      # ops.json, as a store symlink. This makes in-game /op and /deop
+      # non-durable: the module recreates the symlink at every ExecStartPre, so
+      # the nightly restart (minecraft-restart.nix) reverts them. Ops live here
+      # now. Bans work the same way - add a `bannedPlayers` attrset here rather
+      # than relying on /ban, which will not survive a restart either. cloud1's
+      # masquerade makes every player 10.100.0.1 to us, so username bans were
+      # already the only lever that did anything.
+      operators.br1gg_s = {
+        uuid = "525337e6-f77e-413a-8e56-c7d81899a5f5"; # resolved via the Mojang API
+        level = 4;
       };
 
       # Heap bounds match the pack's user_jvm_args.txt; the G1 flags are the
@@ -151,7 +184,17 @@ in
       };
       files = {
         config = "${serverPack}/config";
-        kubejs = "${serverPack}/kubejs";
+        kubejs = kubejsWithColor;
+        # FTB Ranks reads <world>/serverconfig/ftbranks/. Nested `files` paths
+        # are safe here: the module mkdir -p's the parent, and its cleanup
+        # removes only this exact path, so nothing else under world/ is at
+        # risk. A pre-existing ranks.snbt is renamed to .bak rather than
+        # clobbered, so adopting a live config loses nothing.
+        #
+        # Only the POLICY is managed. players.snbt - who is in which rank - is
+        # deliberately left unmanaged so `/ftbranks add <player> trusted`
+        # persists across restarts.
+        "world/serverconfig/ftbranks/ranks.snbt" = atmonsRanks.ranksSnbt;
       };
     };
   };
