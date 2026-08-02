@@ -336,6 +336,12 @@
         # reports healthy and is connected to nothing. Asserts runtime behaviour
         # only: rules loaded, events emitted, journald actually receiving them.
         audit = import ./tests/audit.nix { inherit pkgs; };
+        # Guards the ATMons console failure that builds and evaluates perfectly:
+        # a write to the server's stdin FIFO while its socket is down leaves a
+        # REGULAR FILE there, after which the socket refuses to start and the
+        # server never comes back. Also pins both age recipients on the world
+        # backup - dropping one is invisible until the day you need a restore.
+        minecraft-console = import ./tests/minecraft-console.nix { inherit pkgs; };
         # fmt + lint gate. Fails on an unformatted tree -- the `style: nix fmt the
         # tree` commit is what makes it green (drop that commit and this goes red).
         formatting = treefmtEval.config.build.check self;

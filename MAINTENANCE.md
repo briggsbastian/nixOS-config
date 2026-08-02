@@ -198,6 +198,7 @@ State that isn't in the repo and would be lost on a reinstall:
 | step-ca root + intermediate | `mgmt:/var/lib/private/step-ca/` | Lose it and every device re-trusts. Auto-backed-up — **verify, don't assume** (below). |
 | SSH host keys | `/etc/ssh/ssh_host_*` | The sops identity; keep across re-images. |
 | sops secrets | `secrets/*.yaml` | Safe in git (encrypted). |
+| ATMons world | `hacktop:/srv/minecraft/atmons` | Players' work, and the only griefing rollback on an open server. Daily 04:00 local, quiesced, auto-verified monthly. |
 
 `backup.nix` runs daily at 03:30: it streams `/var/lib/private/step-ca`,
 `/var/lib/mgmt-secrets` and — when NetBox is enabled — `/var/backup/postgresql`
@@ -232,6 +233,64 @@ stream — treat any archive dated before 2026-07-24 as unverified until you hav
 listed it with the command above.
 
 Loki's data (`mgmt:/var/lib/loki`) isn't backed up; it refills from the journals.
+
+### The ATMons world
+
+`hosts/lan/hacktop/minecraft-backup.nix` runs daily at 04:00 **local** time (not
+UTC — `time.timeZone` is `America/Los_Angeles`, and systemd calendar specs use
+the system timezone). It pauses saving, flushes the world, tars it through `age`
+to the NAS, keeps the newest 14, then re-enables saving.
+
+Unlike mgmt's backup, these archives carry **two** age recipients: the admin key
+and hacktop's own SSH host key. That second one is what lets hacktop verify its
+own backups — `minecraft-backup-verify.service` runs monthly, decrypts the newest
+archive and walks every tar header. It also means a hacktop compromise can read
+historical worlds, which was judged an acceptable price for verifiability.
+
+```sh
+# proof, not vibes: written only on a successful run
+ssh deploy@192.168.1.26 cat /var/lib/node-exporter-textfile/minecraft_backup.prom
+#   minecraft_backup_quiesced 0  means the archive may catch a partial save
+ssh deploy@192.168.1.26 sudo systemctl start minecraft-backup-verify   # verify on demand
+
+# restore, on the desktop (stop the server first):
+age -d -i ~/.config/sops/age/keys.txt atmons-world-<ts>.tar.age | sudo tar -C /srv/minecraft -xv
+```
+
+Alerts: `MinecraftBackupStale`, `MinecraftBackupNotQuiesced`,
+`MinecraftBackupShrank`, `MinecraftBackupUnverified`.
+
+## The ATMons Minecraft server
+
+**The console is not a terminal.** It is a systemd FIFO
+(`/run/minecraft/atmons.stdin`), so `tmux attach` no longer exists:
+
+```sh
+journalctl -fu minecraft-server-atmons     # read the console
+sudo mc-console send 'list'                # write to it
+sudo mc-console up                         # is it writable at all?
+```
+
+**Never** write to that path with a shell redirect. If the socket unit happens to
+be down, `echo x > /run/minecraft/atmons.stdin` creates a *regular file* there,
+and the socket then refuses to start — the server never comes back until someone
+removes it by hand. `mc-console` exists solely to make that impossible, and
+`checks.x86_64-linux.minecraft-console` keeps it that way.
+
+**Roles.** Policy lives in git (`hosts/lan/hacktop/atmons-ranks.nix`, generated
+into `world/serverconfig/ftbranks/ranks.snbt`); membership lives on the server.
+So `/ftbranks add <player> trusted` persists, but editing ranks in-game does not
+— the file is re-copied from the store on every start. `trusted` grants nothing
+in-world; it only unlocks `/color`.
+
+**Ops and bans are declarative now**, which means in-game `/op`, `/deop` and
+`/ban` are reverted at the nightly restart. Add them to the `operators` /
+`bannedPlayers` attrsets in `minecraft.nix` instead. (Username bans are the only
+ones that work anyway: cloud1's masquerade makes every player `10.100.0.1`.)
+
+The server restarts nightly at ~05:00 local with 15/5/1-minute in-game warnings,
+because a 371-mod pack leaks — it was at 11.6 GB RSS after five days against an
+8 GB heap cap.
 
 ## Rollback
 
