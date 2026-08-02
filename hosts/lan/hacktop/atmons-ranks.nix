@@ -85,6 +85,53 @@ let
     }
   ];
 
+  # Minecraft's formatting codes share the same &-prefixed namespace as the
+  # colours, so one name_format can carry both. Each code needs its OWN
+  # ampersand: "&6l" is a literal letter l in gold, "&6&l" is bold gold. That
+  # mistake is invisible until you look at a name in game, hence this note.
+  #
+  # "magic" (&k) is the scrambling-glyph effect. Included because it was asked
+  # for, but it renders a name unreadable, which on an open server makes
+  # moderation harder - you cannot read who you are about to ban.
+  styles = [
+    {
+      id = "plain";
+      code = "";
+    }
+    {
+      id = "bold";
+      code = "l";
+    }
+    {
+      id = "italic";
+      code = "o";
+    }
+    {
+      id = "underline";
+      code = "n";
+    }
+    {
+      id = "magic";
+      code = "k";
+    }
+  ];
+
+  # Colour and style cannot be two independent ranks: FTB Ranks resolves a node
+  # to the highest-power rank that defines it, so two ranks both setting
+  # ftbranks.name_format would mean one silently wins and the other vanishes.
+  # The combinations are therefore materialised as one rank each - cheap, since
+  # nix writes them. "plain" keeps the bare color_<colour> name, so any rank
+  # already assigned in players.snbt stays valid.
+  combos = lib.concatMap (
+    c:
+    map (s: {
+      colour = c.id;
+      style = s.id;
+      rank = "color_${c.id}" + lib.optionalString (s.id != "plain") "_${s.id}";
+      format = "&${c.code}" + lib.optionalString (s.code != "") "&${s.code}";
+    }) styles
+  ) colours;
+
   # Cobblemon commands that only read, or rename the player's own things. None
   # can create, edit or heal a Pokemon, so none is an economy or progression
   # lever. Names taken from the CobblemonPermissions string table in the
@@ -146,12 +193,12 @@ let
   grantLines = lib.concatMapStrings (n: "\t\t${n}: true\n") playerNodes;
 
   colourRanks = lib.concatMapStrings (c: ''
-    	color_${c.id}: {
-    		name: "Colour: ${c.id}"
+    	${c.rank}: {
+    		name: "Name: ${c.colour} ${c.style}"
     		power: 100
-    		ftbranks.name_format: "<&${c.code}{name}&r>"
+    		ftbranks.name_format: "<${c.format}{name}&r>"
     	}
-  '') colours;
+  '') combos;
 
   ranksSnbt = pkgs.writeText "ranks.snbt" (
     ''
@@ -170,21 +217,27 @@ let
     ''
     + grantLines
     + ''
-      	}
-
-      	# Manually granted with: /ftbranks add <player> trusted
-      	# Carries no game privileges at all - its only job is to gate /color,
-      	# so "trusted" can be handed out freely without widening what anyone is
-      	# able to do to the world.
-      	trusted: {
-      		name: "Trusted"
-      		power: 50
+      		# Picking your own name colour is cosmetic and grants nothing in
+      		# world, so everyone gets it. Move this line into `trusted` below to
+      		# make /color a reward again - the command reads this node, so that
+      		# one move is the whole change.
       		command.color: true
       	}
 
-      	# One rank per colour, assigned by /color (see atmons-color.js). Power
-      	# 100 so name_format outranks `player`; each carries nothing but the
-      	# colour, so being recoloured can never change what a player may do.
+      	# Manually granted with: /ftbranks add <player> trusted
+      	# Currently grants nothing: /color moved to `player` above. Kept defined
+      	# because players.snbt already references it, and deleting a rank out
+      	# from under its members is a worse kind of tidy. It is the obvious
+      	# place to hang a future perk.
+      	trusted: {
+      		name: "Trusted"
+      		power: 50
+      	}
+
+      	# One rank per colour+style combination, assigned by /color (see
+      	# atmons-color.js). Power 100 so name_format outranks `player`; each
+      	# carries nothing but the format, so being recoloured can never change
+      	# what a player is allowed to do.
     ''
     + colourRanks
     + ''
@@ -203,5 +256,5 @@ let
   );
 in
 {
-  inherit colours ranksSnbt;
+  inherit combos ranksSnbt;
 }

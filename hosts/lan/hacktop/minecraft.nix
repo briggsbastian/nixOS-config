@@ -58,7 +58,7 @@ let
   atmonsRanks = import ./atmons-ranks.nix { inherit pkgs lib; };
   atmonsColor = import ./atmons-color.nix {
     inherit pkgs lib;
-    inherit (atmonsRanks) colours;
+    inherit (atmonsRanks) combos;
   };
 
   # The pack's kubejs/ holds only data/ overrides - no server_scripts at all -
