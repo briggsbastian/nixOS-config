@@ -87,6 +87,30 @@
     enable = true;
     enable32Bit = true;
   };
+  # Memory headroom for big JVM games. The AllTheMons Minecraft client asks for
+  # an 8 GiB heap and carries ~7 GiB of native memory on top (malloc arenas,
+  # LWJGL/GL buffers, and direct buffers, whose default cap equals -Xmx), so it
+  # sits near 15 GiB of a 30 GiB machine. hardware-configuration.nix leaves
+  # swapDevices empty, which meant the kernel's only reclaim option was evicting
+  # page cache: it fell to ~220 MiB before the OOM killer fired, and every
+  # process re-reading its own executable off disk is what hung the whole
+  # desktop for a minute before the game finally died.
+  #
+  # zram is deliberately modest. The game's heap is *hot*, and compressing hot
+  # pages would just trade the freeze for in-game stutter; this is sized to park
+  # genuinely cold pages (backgrounded Discord, baloo, idle shells) so they stop
+  # competing with the page cache.
+  zramSwap = {
+    enable = true;
+    memoryPercent = 25; # ~7.5 GiB device (uncompressed capacity), not 25% of RAM spent
+  };
+  # systemd-oomd is enabled by default but does nothing out of the box: every
+  # slice ships ManagedOOMMemoryPressure=auto, i.e. off, so we always fell
+  # through to the kernel's late global OOM killer. This sets it to `kill` at
+  # 80% sustained pressure on user.slice and every user-owned slice, which
+  # covers the app.slice scope the game runs in. Sustained 80% pressure only
+  # happens in the pathological case, so ordinary heavy builds won't trip it.
+  systemd.oomd.enableUserSlices = true;
   # Enable CUPS to print documents, even though I don't own a printer.
   services.printing.enable = true;
   # Out of box pipewire, everything goes through Volt 2/76 anyways.
