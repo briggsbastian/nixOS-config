@@ -294,8 +294,10 @@ way, ban the *username*: cloud1's masquerade makes every player `10.100.0.1`, so
 nftables.
 
 The server restarts nightly at ~05:00 local with 15/5/1-minute in-game warnings,
-because a 371-mod pack leaks — it was at 11.6 GB RSS after five days against an
-8 GB heap cap.
+because a 371-mod pack leaks — it was at 11.6 GB RSS after five days against the
+old 8 GB heap cap. The heap is now 12 GB fixed (`Xms == Xmx`, pre-touched), so
+expect ~15–16 GB RSS from startup rather than a climb to it; `minecraft.nix` has
+the RAM arithmetic against the CI runner that shares this box.
 
 ### Attributing an incident to a source address
 
@@ -349,6 +351,47 @@ sudo mc-console send 'spark profiler stop'
 ```
 
 `observable` is also installed and reports lag by entity/block.
+
+`spark` answers "what is slow *right now*". For a stall that already happened,
+the JVM writes a GC + safepoint log to `/var/log/minecraft-atmons/gc.log`
+(5 × 32 MB, rotated by the JVM, outside `/srv` so the nightly world backup does
+not sweep it up):
+
+The files are `0660 minecraft:minecraft` (the unit's `UMask=0007`), so reading
+them needs `sudo` — and `deploy` has no passwordless sudo, so use `ssh -t` or
+just run these on the box:
+
+```sh
+ssh -t deploy@192.168.1.26
+
+# every stop-the-world pause over 1s, GC-caused or not. Total: is in NANOseconds
+# — the legacy "application threads were stopped" line does not exist under
+# unified logging, don't grep for it.
+sudo awk -F'Total: ' '/Safepoint /{split($2,t," ");
+  if (t[1]+0 > 1e9) printf "%8.2f s  %s\n", t[1]/1e9, $0}' /var/log/minecraft-atmons/gc.log
+
+# heap occupancy either side of each collection — is it filling up over the day?
+sudo grep -E 'Pause (Young|Full)' /var/log/minecraft-atmons/gc.log | tail -40
+```
+
+Rotation is the JVM's own (`gc.log`, then `gc.log.0`…`gc.log.4`), and it starts
+a fresh file on every restart — so a nightly-restart cycle is roughly one file.
+
+This distinguishes the two causes of a "Can't keep up!" line, which `spark`
+after the fact cannot. Read the **safepoint name** on any multi-second pause:
+
+- `G1CollectForAllocation` / `Pause Full` → a **collector pause**. The heap is
+  the problem; the fix is more heap or less garbage, and the `Pause Young` lines
+  will show occupancy climbing toward the cap through the day.
+- anything else, or tick lag with **no** pause of comparable length → the tick
+  did six seconds of honest work. The fix is less per-tick work (`spark
+  profiler`, entity/chunk load), and more heap will do nothing.
+
+They need opposite fixes, so check here before tuning anything.
+
+Baseline as of 2026-08-02, worth knowing before reading this as an emergency:
+the server produced ~16 `Can't keep up!` lines/day at 1–2 players, worst 14.1 s.
+`MinecraftTickLag` only fires above 10 in 15m, so that drip does not alert.
 
 ### Surgical grief repair
 

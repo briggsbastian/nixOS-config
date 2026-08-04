@@ -61,6 +61,12 @@ let
     inherit (atmonsRanks) combos;
   };
 
+  # JVM GC/safepoint log target. Deliberately NOT under /srv/minecraft/atmons:
+  # minecraft-backup.nix tars that whole directory nightly and keeps 14
+  # encrypted copies on the NAS, so a log living there would ride along in
+  # every one of them. See the -Xlog flag below for the rest of the rationale.
+  gcLogDir = "/var/log/minecraft-atmons";
+
   # The pack's kubejs/ holds only data/ overrides - no server_scripts at all -
   # so /color is purely additive. Merged into one store path rather than added
   # as a second nested `files` entry: that would depend on nix-minecraft
@@ -129,12 +135,32 @@ in
         level = 4;
       };
 
-      # Heap bounds match the pack's user_jvm_args.txt; the G1 flags are the
-      # pack-shipped (Aikar-style) tuning. 8 GB max still leaves >20 GB for
-      # CI builds.
+      # Heap: 12 GB, fixed. Raised from 4G/8G (the pack's own user_jvm_args.txt
+      # bounds) after the journal showed "Can't keep up!" ~16x/day with only
+      # 1-2 players online - stalls of 2.4s to 14.1s, the worst of them late in
+      # the nightly restart cycle, while the box itself sat at 5-7% CPU with
+      # 23 GiB free. That is the shape of a heap running out of room, not of a
+      # server short on hardware. The G1 flags below are unchanged: they are
+      # the pack-shipped (Aikar-style) tuning.
+      #
+      # Xms == Xmx deliberately. Those flags assume a FIXED heap
+      # (InitiatingHeapOccupancyPercent=15 means little against a growing one),
+      # and pinning it removes heap-resize pauses as a variable while the GC
+      # log below is being read. With AlwaysPreTouch this means all 12 GB is
+      # faulted in during startup: boot is slower, and RSS starts high instead
+      # of climbing to it.
+      #
+      # RAM budget - CI shares this box and there is NO SWAP
+      # (hardware-configuration.nix: swapDevices = []), so this has to be
+      # checked rather than assumed:
+      #   12 GB heap + ~3.6 GB non-heap  = ~15.6 GB   (non-heap measured: the
+      #     pack hit 11.6 GB RSS against the old 8 GB cap - see MAINTENANCE.md)
+      #   + ~9 GB CI peak                = ~24.6 GB of 31 GiB
+      # Roughly 6 GiB of margin at the worst overlap. Do not raise this again
+      # without re-measuring the CI side first.
       jvmOpts = [
-        "-Xms4G"
-        "-Xmx8G"
+        "-Xms12G"
+        "-Xmx12G"
         "-XX:+UseG1GC"
         "-XX:+ParallelRefProcEnabled"
         "-XX:MaxGCPauseMillis=200"
@@ -153,6 +179,29 @@ in
         "-XX:SurvivorRatio=32"
         "-XX:+PerfDisableSharedMem"
         "-XX:MaxTenuringThreshold=1"
+
+        # The question this exists to answer: are the multi-second stalls
+        # collector pauses, or one tick doing six seconds of honest work? The
+        # gc tags alone cannot tell those apart - `safepoint` can, because it
+        # times every stop-the-world pause including the ones GC did not cause.
+        # gc+cpu additionally splits a pause into user/sys/real, which
+        # separates "the collector was busy" from "the collector was waiting".
+        #
+        # No `gc*` wildcard on purpose. nix-minecraft interpolates jvmOpts
+        # UNQUOTED into a bash start script whose cwd is the server directory,
+        # so a `*` here is live to pathname expansion. Nothing plausible would
+        # match this word today, but explicit tags cost nothing and cannot.
+        #
+        # A file, not the journal - the opposite of the console decision above
+        # (see managementSystem). That switch existed to get game output into
+        # Loki; this is high-volume machine-readable telemetry that would bury
+        # exactly those lines. The JVM rotates it itself, capped at 5 x 32 MB.
+        #
+        # HAZARD: if this path is not writable the JVM does not warn and carry
+        # on - it fails to initialise, and with Restart=always that is a crash
+        # loop into StartLimitBurst. The tmpfiles rule below is what makes the
+        # directory's existence guaranteed rather than incidental.
+        "-Xlog:gc,gc+cpu,gc+heap,safepoint:file=${gcLogDir}/gc.log:time,uptime,level,tags:filecount=5,filesize=32M"
       ];
 
       # Pack-recommended settings from its startserver.sh, plus our motd.
@@ -206,6 +255,26 @@ in
       };
     };
   };
+
+  # Guarantees the -Xlog target directory exists and is writable before the
+  # server starts; see the HAZARD note on that flag. systemd-tmpfiles-setup
+  # runs at sysinit, long before multi-user.target pulls the game server up,
+  # and it re-asserts the directory on every switch - so this holds on a fresh
+  # install and after someone deletes the logs by hand, not just today.
+  #
+  # ProtectSystem=full on the unit leaves /var writable, and the minecraft uid
+  # is mapped inside the unit's PrivateUsers namespace, so the service can
+  # write here as itself.
+  # 0755 so the directory can at least be listed without sudo. Note this does
+  # NOT make the logs readable: the unit sets UMask=0007, so the JVM creates
+  # gc.log itself as 0660 minecraft:minecraft regardless of the mode here.
+  # Reading them needs sudo (or membership of the minecraft group), which is
+  # why the commands in MAINTENANCE.md carry it. Tightening this back to 0750
+  # would therefore buy nothing; loosening the FILES would mean fighting the
+  # module's umask on every rotation.
+  systemd.tmpfiles.rules = [
+    "d ${gcLogDir} 0755 minecraft minecraft - -"
+  ];
 
   # nix-minecraft's unit is already well sandboxed (CapabilityBoundingSet="",
   # PrivateUsers, ProtectHome, ...) but misses these two. Same rationale as
