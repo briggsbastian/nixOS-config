@@ -83,8 +83,35 @@
       }
       chain forward-limit {
         type filter hook forward priority filter; policy accept;
+
+        # Attribution. This is the ONLY point on the estate where a player's
+        # real address exists: the masquerade above rewrites it to 10.100.0.1
+        # before hacktop ever sees it, so the game server can log a username
+        # and nothing else. One kernel line per new connection, correlated to
+        # a username by timestamp against "joined the game" on hacktop.
+        #
+        # This logs connection ATTEMPTS, not accepted connections - it sits
+        # before the throttle deliberately, because during a flood the source
+        # addresses being dropped are exactly what an investigation wants.
+        #
+        # The rate limit here throttles the LOGGING, not the traffic. `limit`
+        # is a matcher, so once exceeded this rule simply stops matching and
+        # the packet carries on to the throttle untouched. Without it a
+        # connection flood would be amplified into a journald write storm and
+        # a Loki ingest storm - turning a nuisance into an outage of the very
+        # thing meant to observe it.
         oifname "wg-mc" tcp dport 25565 ct state new \
-          add @mc_ratelimit { ip saddr limit rate over 10/minute burst 10 packets } drop
+          limit rate 20/second burst 40 packets \
+          log prefix "mc-conn " level notice
+
+        # Unchanged throttle, now counted. Deliberately NOT logged per packet:
+        # a drop storm is precisely when logging hurts most, and the attempts
+        # were already recorded above. proxy-metrics.nix turns this counter
+        # into minecraft_proxy_ratelimit_dropped_packets_total instead, which
+        # is alertable and graphable without writing a single line.
+        oifname "wg-mc" tcp dport 25565 ct state new \
+          add @mc_ratelimit { ip saddr limit rate over 10/minute burst 10 packets } \
+          counter drop
       }
     '';
   };

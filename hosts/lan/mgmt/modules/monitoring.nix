@@ -439,9 +439,71 @@ in
                 annotations:
                   summary: "The ATMons backup has not been restore-verified in over 40 days"
                   description: "minecraft-backup-verify.service last succeeded more than 40d ago, or never. A green timer is not a backup."
+
+          - name: minecraft-proxy
+            rules:
+              # cloud1's per-source-IP throttle (hosts/cloud/cloud1/proxy.nix)
+              # only drops when a single address opens more than 10 new
+              # connections a minute. A human reconnecting does not do that; a
+              # join-flood bot or a scanner does. Sustained for 10m means
+              # something is hammering the public path.
+              #
+              # Counter, not a log line, on purpose: a drop storm is exactly
+              # when per-packet logging would turn an attack on the game into
+              # an attack on the journal. The source addresses are still
+              # recorded - proxy.nix logs the ATTEMPTS, rate-limited.
+              - alert: MinecraftConnectionFlood
+                expr: rate(minecraft_proxy_ratelimit_dropped_packets_total[5m]) > 0
+                for: 10m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Sustained connection flooding against the public Minecraft path"
+                  description: "cloud1's rate limiter has been dropping new connections for 10m. Query {host=\"cloud1\"} |= \"mc-conn \" in Loki for the source addresses."
       ''
     ];
   };
+
+  # LogQL alerts for the Minecraft path, as a SECOND file in the same tenant
+  # directory rather than an edit to modules/siem-lite.nix. Three reasons:
+  # siem-lite sets alerts.yaml with `.text`, so it cannot be appended to from
+  # here; the ruler reads every file in the directory, so a second one just
+  # works; and a game-server rule does not belong in a fleet-wide security
+  # module that every host imports.
+  environment.etc."loki/rules/fake/minecraft.yaml".text = ''
+    groups:
+      - name: minecraft
+        rules:
+          # Sustained tick starvation. This is both an ordinary health signal
+          # and the visible symptom of resource exhaustion, which is the shape
+          # an attack on a modded server actually takes - nobody bothers with
+          # packet floods when a hopper array will do.
+          #
+          # Threshold from measurement, not taste: the live server produced ~8
+          # of these in 4h of uptime, clustered around startup and player
+          # joins, worst case 8.7s behind. >10 inside 15m is a stall storm.
+          - alert: MinecraftTickLag
+            expr: |
+              sum(count_over_time({unit="minecraft-server-atmons.service"} |= `Can't keep up` [15m])) > 10
+            for: 0m
+            labels: { severity: warning }
+            annotations:
+              summary: "ATMons server is repeatedly failing to keep up"
+              description: "{{ $value }} tick-lag warnings in 15m. Run `spark tps` and `spark profiler start` on the console to find the cause."
+
+          # Matches the vanilla crash line specifically. Deliberately NOT a
+          # generic ERROR match: this pack logs a wall of mekmm loot-table
+          # errors at every single boot, so an ERROR-based rule would fire on
+          # every restart and be muted within a week.
+          - alert: MinecraftServerCrash
+            expr: |
+              sum(count_over_time({unit="minecraft-server-atmons.service"} |= `Encountered an unexpected exception` [10m])) > 0
+            for: 0m
+            labels: { severity: critical }
+            annotations:
+              summary: "ATMons server hit an unhandled exception"
+              description: "The server logged a crash. journalctl -u minecraft-server-atmons on hacktop has the trace - it survives the process now that the console goes to the journal."
+  '';
 
   # Grafana's DB encryption key. Grafana 13 (nixos-26.05) dropped the module's
   # implicit default, and this was briefly pinned to upstream's old fallback

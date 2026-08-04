@@ -112,10 +112,18 @@ in
       # ops.json, as a store symlink. This makes in-game /op and /deop
       # non-durable: the module recreates the symlink at every ExecStartPre, so
       # the nightly restart (minecraft-restart.nix) reverts them. Ops live here
-      # now. Bans work the same way - add a `bannedPlayers` attrset here rather
-      # than relying on /ban, which will not survive a restart either. cloud1's
-      # masquerade makes every player 10.100.0.1 to us, so username bans were
-      # already the only lever that did anything.
+      # now.
+      #
+      # BANS ARE NOT AFFECTED. nix-minecraft only manages banned-players.json
+      # when `bannedPlayers` is non-empty, and it is not set below - so
+      # in-game /ban writes that file directly and survives restarts. Adding a
+      # `bannedPlayers` attrset here would flip that: bans would become
+      # declarative and in-game /ban would then start reverting too. Choose
+      # deliberately rather than by accident.
+      #
+      # Either way it has to be a USERNAME ban: cloud1's masquerade makes every
+      # player 10.100.0.1 to us, so /ban-ip does nothing useful. The only place
+      # an address can actually be blocked is cloud1's nftables.
       operators.br1gg_s = {
         uuid = "525337e6-f77e-413a-8e56-c7d81899a5f5"; # resolved via the Mojang API
         level = 4;

@@ -283,14 +283,94 @@ So `/ftbranks add <player> trusted` persists, but editing ranks in-game does not
 — the file is re-copied from the store on every start. `trusted` grants nothing
 in-world; it only unlocks `/color`.
 
-**Ops and bans are declarative now**, which means in-game `/op`, `/deop` and
-`/ban` are reverted at the nightly restart. Add them to the `operators` /
-`bannedPlayers` attrsets in `minecraft.nix` instead. (Username bans are the only
-ones that work anyway: cloud1's masquerade makes every player `10.100.0.1`.)
+**Ops are declarative**, so in-game `/op` and `/deop` are reverted at the nightly
+restart — put operators in the `operators` attrset in `minecraft.nix` instead.
+
+**Bans are not.** `nix-minecraft` only manages `banned-players.json` when
+`bannedPlayers` is non-empty, and it is unset, so in-game `/ban` writes that file
+directly and persists. Setting `bannedPlayers` would flip that behaviour. Either
+way, ban the *username*: cloud1's masquerade makes every player `10.100.0.1`, so
+`/ban-ip` is useless and the only place an address can be blocked is cloud1's
+nftables.
 
 The server restarts nightly at ~05:00 local with 15/5/1-minute in-game warnings,
 because a 371-mod pack leaks — it was at 11.6 GB RSS after five days against an
 8 GB heap cap.
+
+### Attributing an incident to a source address
+
+The game server logs a **username**; cloud1 masquerades, so the address it sees
+is always `10.100.0.1`. The real client address exists at exactly one place: the
+`mc-conn` line cloud1's nftables writes as the connection crosses the forward
+hook, before the masquerade. Grafana → **ATMons - Security & Attribution** puts
+the two side by side for exactly this.
+
+```sh
+# 1. when did they join?  (Loki, or on the box)
+{unit="minecraft-server-atmons.service"} |= `joined the game`
+
+# 2. what connected around then?
+{host="cloud1"} |= `mc-conn `        # SRC=<real address>
+```
+
+This is correlation by timestamp, not proof. With several people joining inside
+the same few seconds it narrows the field rather than identifying someone — say
+so out loud before acting on it.
+
+To actually block an address, it has to be done on cloud1 (nftables); a
+`/ban-ip` on the game server is meaningless behind the masquerade.
+
+### Moderation
+
+```sh
+sudo mc-console send 'ban <player> <reason>'   # persists; see the note above
+sudo mc-console send 'kick <player> <reason>'
+sudo mc-console send 'pardon <player>'
+sudo mc-console send 'banlist'
+sudo mc-console send 'mute <player> 10m'       # FTB Essentials, chat only
+```
+
+The pack also ships its own KubeJS banlist (`server_banlist_config.json`, read by
+`kubejs/server_scripts/banlist_script.js`) which bans *items*, replaces banned
+block entities with signs, and blocks banned mob spawns — worth knowing before
+reaching for a mod.
+
+### Diagnosing lag
+
+`spark` is already in the pack and works from the console. This is the response
+to a `MinecraftTickLag` alert:
+
+```sh
+sudo mc-console send 'spark tps'
+sudo mc-console send 'spark health'
+sudo mc-console send 'spark profiler start'
+# ... let it run through the bad period ...
+sudo mc-console send 'spark profiler stop'
+```
+
+`observable` is also installed and reports lag by entity/block.
+
+### Surgical grief repair
+
+Restoring the whole world costs everyone a day. A region file covers 512×512
+blocks, so `region = floor(coord / 512)` — extract just the affected one:
+
+```sh
+# griefed around x=6500, z=-5300  ->  r.12.-11.mca
+age -d -i /etc/ssh/ssh_host_ed25519_key atmons-world-<ts>.tar.age \
+  | tar -xf - atmons/world/region/r.12.-11.mca
+```
+
+Stop the server, drop the file into `/srv/minecraft/atmons/world/region/`, start.
+
+### Known blind spot: no command auditing
+
+There is **no record of what commands anyone ran** — verified as zero
+`issued server command` lines across 30h of journal, including for `/ftbranks`
+commands that were definitely executed. Vanilla's `logAdminCommands` only covers
+commands that emit feedback, and most mod commands do not. Closing this properly
+needs a mod. Written down so it is a known gap rather than a false sense of
+coverage.
 
 ## Rollback
 
