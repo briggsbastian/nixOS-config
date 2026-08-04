@@ -1,15 +1,16 @@
 # hosts/lan/hacktop/minecraft.nix
 #
-# All the Mons (ATMons) modpack server (Minecraft 1.21.1, NeoForge 21.1.234).
+# All the Mons (ATMons) modpack server (Minecraft 1.21.1, NeoForge 21.1.248).
 # hacktop has the fleet's RAM headroom (32 GB, ~29 available), so the game
 # server lives here alongside the CI runner.
 #
-# ATMons is a full CurseForge modpack (373 mods + KubeJS scripts), not the
+# ATMons is a full CurseForge modpack (375 mods + KubeJS scripts), not the
 # old AllTheMons-datapack-on-Cobblemon setup this replaced. Server side is
 # fully declarative: nix-minecraft's offline NeoForge launcher plus the
 # pack's official ServerFiles zip, unpacked into pinned store paths. Clients
-# must run the matching "All the Mons 1.1.1" pack from the CurseForge app -
-# a vanilla/Fabric client can no longer join.
+# must run the matching "All the Mons 1.2.0" pack from the CurseForge app -
+# a vanilla/Fabric client can no longer join, and neither can a client still
+# on 1.1.1.
 #
 # The old Fabric world is preserved at /srv/minecraft/allthemons on hacktop;
 # this server starts fresh in /srv/minecraft/atmons.
@@ -27,9 +28,9 @@
 
 let
   serverFiles = pkgs.fetchurl {
-    # "All the Mons - ATMons" project 1356598, server pack file 8431025
-    url = "https://mediafilez.forgecdn.net/files/8431/25/ServerFiles-1.1.1.zip";
-    hash = "sha256-3+mw6yldX6EPTwBNTZqVbINnM0r24b583wb8FPYhxaQ=";
+    # "All the Mons - ATMons" project 1356598, server pack file 8572602
+    url = "https://mediafilez.forgecdn.net/files/8572/602/ServerFiles-1.2.0.zip";
+    hash = "sha256-3hEu2NebP/An45mlEItwb2ots750sV0Ntva51qwmjmw=";
   };
 
   # Unpack once at build time; the zip has no top-level directory. Only the
@@ -37,7 +38,7 @@ let
   # are replaced by nix-minecraft's offline launcher.
   serverPack = pkgs.stdenvNoCC.mkDerivation {
     pname = "atmons-server-pack";
-    version = "1.1.1";
+    version = "1.2.0";
     src = serverFiles;
     nativeBuildInputs = [ pkgs.unzip ];
     sourceRoot = ".";
@@ -67,11 +68,20 @@ let
   # every one of them. See the -Xlog flag below for the rest of the rationale.
   gcLogDir = "/var/log/minecraft-atmons";
 
-  # The pack's kubejs/ holds only data/ overrides - no server_scripts at all -
-  # so /color is purely additive. Merged into one store path rather than added
-  # as a second nested `files` entry: that would depend on nix-minecraft
-  # applying "kubejs" before "kubejs/server_scripts/...", which is true today
-  # only because attrset iteration is sorted. This is order-independent.
+  # /color, merged into the pack's own kubejs tree.
+  #
+  # The pack DOES ship server_scripts (133 of them in 1.2.0, 130 in 1.1.1) -
+  # an earlier version of this comment claimed it shipped none, which was
+  # wrong even then. What makes /color safe is narrower and needs rechecking
+  # at each pack update: no pack script is named atmons_color.js, and none
+  # registers a "color" command (the only command they add is /wits, in
+  # server_scripts/modpack/commands.js). So this is additive by filename and
+  # by command name, not because the directory was empty.
+  #
+  # Merged into one store path rather than added as a second nested `files`
+  # entry: that would depend on nix-minecraft applying "kubejs" before
+  # "kubejs/server_scripts/...", which is true today only because attrset
+  # iteration is sorted. This is order-independent.
   kubejsWithColor = pkgs.runCommand "atmons-kubejs" { } ''
     mkdir -p $out/server_scripts
     cp -r ${serverPack}/kubejs/. $out/
@@ -90,7 +100,25 @@ in
     servers.atmons = {
       enable = true;
       # Pin the exact loader build the pack ships (see startserver.sh in the zip).
-      package = pkgs.neoforgeServers.neoforge-1_21_1-21_1_234;
+      #
+      # The `override` pins the JVM, and is load-bearing - do not drop it as
+      # tidying. nix-minecraft used to leave `jre_headless` at the nixpkgs
+      # default, which is Java 21; as of upstream bc289235 it instead inherits
+      # the vanilla server's `java`, and that is `java_versions.getLatest 21` -
+      # the newest JDK satisfying >=21, i.e. Java 25 today and climbing. The
+      # same NeoForge build silently changed JVM across that bump:
+      #
+      #   nix-minecraft c8f946c9 -> openjdk-headless-21.0.12
+      #   nix-minecraft bfab3c65 -> openjdk-25.0.4        (and not headless)
+      #
+      # NeoForge 21.1.x targets Java 21, and a 375-mod 1.21.1 pack is exactly
+      # the workload that breaks on a newer class file version - Mixin refuses
+      # class files it does not know, and JDK 24+ restricts the sun.misc.Unsafe
+      # memory access that mods of this vintage still use. Nothing here needs a
+      # newer JVM, so take the one the pack was built and tested against.
+      package = pkgs.neoforgeServers.neoforge-1_21_1-21_1_248.override {
+        jre_headless = pkgs.jdk21_headless;
+      };
       openFirewall = true; # 25565/tcp - LAN only, hacktop is behind NAT
 
       # nix-minecraft defaults to tmux, which parks the console in a pane

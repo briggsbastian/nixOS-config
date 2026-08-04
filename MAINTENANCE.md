@@ -294,10 +294,58 @@ way, ban the *username*: cloud1's masquerade makes every player `10.100.0.1`, so
 nftables.
 
 The server restarts nightly at ~05:00 local with 15/5/1-minute in-game warnings,
-because a 371-mod pack leaks — it was at 11.6 GB RSS after five days against the
+because a 374-mod pack leaks — it was at 11.6 GB RSS after five days against the
 old 8 GB heap cap. The heap is now 12 GB fixed (`Xms == Xmx`, pre-touched), so
 expect ~15–16 GB RSS from startup rather than a climb to it; `minecraft.nix` has
 the RAM arithmetic against the CI runner that shares this box.
+
+### Updating the modpack
+
+Everyone must update their CurseForge client in the same window — a client on
+the old pack cannot join. So this is a coordinated change, not a quiet one.
+
+Find the new server-pack file id (the *server* pack, not the client zip):
+
+```sh
+curl -s 'https://www.curseforge.com/api/v1/mods/1356598/files?pageSize=5&sort=dateCreated&sortDescending=true' | jq '.data[] | {id, displayName}'
+curl -s 'https://www.curseforge.com/api/v1/mods/1356598/files/<clientFileId>/additional-files'
+```
+
+The CDN URL splits the id after 4 digits: `8572602` → `files/8572/602/`. Then
+`nix-prefetch-url --type sha256 <url>` (≈1 GB, and it seeds the store so the
+later build does not re-download), and `nix hash convert --to sri` for the hash.
+
+Before editing, check the four things `minecraft.nix` assumes about the zip —
+each is a comment there that goes stale silently:
+
+```sh
+unzip -Z1 <zip> | grep -i crashassistant            # the installPhase `rm` glob must still match
+unzip -Z1 <zip> | grep '^kubejs/server_scripts/'    # nothing named atmons_color.js
+unzip -p  <zip> kubejs/server_scripts/modpack/commands.js | grep -i literal   # nothing registering "color"
+unzip -p  <zip> startserver.sh | grep NEOFORGE_VERSION
+```
+
+Then diff the mod list against the old zip. **Mod removals are the world risk** —
+missing block/entity registries eat chunks; pure version bumps and additions do
+not. 1.1.1 → 1.2.0 removed nothing, which is why it was a safe one.
+
+**The NeoForge bump usually forces a `nix flake update nix-minecraft`, and that
+input controls the JVM.** Upstream now derives the JDK from
+`java_versions.getLatest`, so a routine bump moved the same NeoForge build from
+`openjdk-headless-21` to `openjdk-25`. `minecraft.nix` pins `jre_headless` back
+to `pkgs.jdk21_headless` for that reason — keep the pin, and check what actually
+landed rather than trusting it:
+
+```sh
+nix derivation show -r "/etc/nixos#nixosConfigurations.hacktop.config.system.build.toplevel" \
+  | grep -o 'openjdk-[a-z]*-\?[0-9][0-9.+]*' | sort -u     # expect only 21.x
+```
+
+Deploy takes the server down for a few minutes (12 GB of pre-touched heap plus
+374 mods is a slow boot). Roll back with `colmena apply --on hacktop` from the
+previous commit; the world is untouched by a downgrade only if no new mod wrote
+into it, so take the backup seriously — `minecraft-backup.service` runs at 04:00,
+or start it by hand first.
 
 ### Attributing an incident to a source address
 
