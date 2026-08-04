@@ -460,6 +460,76 @@ in
                 annotations:
                   summary: "Sustained connection flooding against the public Minecraft path"
                   description: "cloud1's rate limiter has been dropping new connections for 10m. Query {host=\"cloud1\"} |= \"mc-conn \" in Loki for the source addresses."
+
+          # hacktop is a laptop doing a server's job, so mains power is a
+          # dependency of the game server the same way the disk is. On
+          # 2026-08-04 it lost power at 11:09:48 and was gone for 16 minutes:
+          # the journal stops mid-line with no shutdown sequence, no kernel
+          # message, no OOM. The battery was at 3%, so there was no ride-through
+          # at all - the box died the instant the mains blinked, and the world
+          # took an unclean shutdown (no chunk damage that time; not a promise).
+          #
+          # Nothing alerted. NodeDown fired only after the fact, saying "host
+          # unreachable" - true but useless, because by then it had already
+          # happened. These three say it *before*, or at least say *why*.
+          #
+          # No instance selector on purpose: node_exporter only emits
+          # power_supply metrics where /sys/class/power_supply is populated, so
+          # today these series exist for hacktop alone and the rules scope
+          # themselves. Another laptop joining the fleet is covered for free.
+          - name: power
+            rules:
+              # Running on battery: a countdown, not a state. Alert fast.
+              #
+              # `max by (instance)` rather than a match on power_supply="AC" is
+              # load-bearing. hacktop has two inputs - the barrel "AC" and a
+              # USB-C PD source - and only one is online at a time. Pinning the
+              # rule to AC would fire every time the machine was legitimately
+              # powered over USB-C. Only when EVERY input reads 0 is it actually
+              # on battery.
+              - alert: HostOnBatteryPower
+                expr: max by (instance) (node_power_supply_online) == 0
+                for: 1m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "{{ $labels.instance }} is running on battery"
+                  description: "No mains or USB-C input is online. This box holds ~60% of its design battery capacity, so assume minutes, not hours. Shut the game server down cleanly before the battery does it for you: sudo mc-console send 'save-all flush' then 'stop'."
+
+              # The state that actually caused the outage: a battery sitting
+              # low while ON mains, so there is no reserve when power blinks.
+              # Invisible without this rule - everything looks healthy right up
+              # until the moment it isn't.
+              #
+              # `for: 2h` because a genuine recharge from near-empty on this
+              # machine takes 1-2h, and alerting during that recovery would
+              # mean paging about the outage that just ended. Still firing
+              # after 2h means it is not charging, which is the real fault.
+              - alert: HostBatteryLow
+                expr: node_power_supply_capacity{power_supply=~"BAT.*"} < 30
+                for: 2h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "{{ $labels.instance }} battery at {{ $value }}% and not recovering"
+                  description: "Below 30% for 2h, so it is not merely recharging after an outage. Until this comes up there is no ride-through: the next mains blip is a hard power cut and an unclean world shutdown. Check the charger and that the barrel/USB-C input is actually seated."
+
+              # Wear, which the capacity alert structurally cannot see: capacity
+              # is a percentage of what the battery holds NOW, not of design.
+              # A worn cell reads a confident 100% and still dies in a fraction
+              # of the original time. Measured 60.2% on 2026-08-04; the
+              # threshold sits below that so this reports real further decay
+              # rather than firing on day one and being muted.
+              - alert: HostBatteryWorn
+                expr: |
+                  node_power_supply_charge_full{power_supply=~"BAT.*"}
+                    / node_power_supply_charge_full_design < 0.5
+                for: 6h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "{{ $labels.instance }} battery has degraded to {{ $value | humanizePercentage }} of design"
+                  description: "The reserve behind HostOnBatteryPower is now less than half of what the hardware shipped with. A full charge no longer buys the time you would assume. Replace the cell, or accept that mains loss means immediate loss of the game server."
       ''
     ];
   };

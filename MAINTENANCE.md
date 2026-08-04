@@ -299,6 +299,29 @@ old 8 GB heap cap. The heap is now 12 GB fixed (`Xms == Xmx`, pre-touched), so
 expect ~15–16 GB RSS from startup rather than a climb to it; `minecraft.nix` has
 the RAM arithmetic against the CI runner that shares this box.
 
+### When the server is unreachable, check power first
+
+hacktop is a laptop doing a server's job, so mains power is a dependency of the
+game server the same way the disk is. On 2026-08-04 it lost power at 11:09:48
+and was gone 16 minutes: the journal stops mid-line, no shutdown sequence, no
+kernel message, no OOM. The battery was at 3%, so there was no ride-through at
+all — and the world took an unclean shutdown.
+
+`NodeDown` only says "host unreachable", which is true but after the fact.
+`HostOnBatteryPower` / `HostBatteryLow` / `HostBatteryWorn` (monitoring.nix,
+group `power`) say it beforehand, or at least say why. To check by hand:
+
+```sh
+ssh deploy@192.168.1.26 'cat /sys/class/power_supply/BAT0/{capacity,status}; cat /sys/class/power_supply/AC/online'
+journalctl -b -1 -n 20 --no-pager   # on the box: a clean reboot ends with a shutdown sequence, a power cut just stops
+```
+
+Battery health was 60% of design as of 2026-08-04
+(`node_power_supply_charge_full / ..._charge_full_design`). Capacity reads a
+percentage of what the cell holds *now*, not of design — so a worn battery shows
+a confident 100% and still dies in a fraction of the expected time. That is what
+`HostBatteryWorn` exists to catch, because `HostBatteryLow` structurally cannot.
+
 ### Updating the modpack
 
 Everyone must update their CurseForge client in the same window — a client on
