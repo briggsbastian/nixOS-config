@@ -625,11 +625,17 @@ journalctl -u minecraft-server-atmons -b | grep 'joined the game' | tail
 nix run nixpkgs#mcstatus -- 192.168.1.26:25565 status            # also lists players
 ```
 
-A join renders as `<[N] name> joined the game`, N being the dex count — a useful
-at-a-glance check, but players without a nickname render as `[N] name` with no angle
-brackets, so don't write a grep that requires them. Use `mcstatus` rather than a
-`/dev/tcp` probe to ask whether the server is up; the latter is unreliable from a
-sandboxed shell.
+A join renders as `<[N] name> joined the game` — a useful at-a-glance check, but
+read the parts correctly before grepping for them. `N` is Cobblemon's *caught*
+count (not seen), prepended by `allthemons-<ver>.jar`. The angle brackets are
+literal characters inside the `ftbranks.name_format` string that `atmons-ranks.nix`
+gives every `color_*` rank — so a player who has never run `/color` has no such
+rank and renders as `[N] name` with no brackets at all. Both parts ride on the
+*display name*, so they appear in death and leave messages too. Don't write a grep
+that requires the brackets.
+
+Use `mcstatus` rather than a `/dev/tcp` probe to ask whether the server is up; the
+latter is unreliable from a sandboxed shell.
 
 ## Rollback
 
