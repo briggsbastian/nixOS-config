@@ -17,7 +17,7 @@
 #
 # The ServerFiles zip is ~1 GB. The mediafilez URL is CurseForge's stable
 # CDN; to avoid re-downloading when the store path gets GC'd, pre-seed from
-# a local copy with: nix-store --add-fixed sha256 ServerFiles-1.1.1.zip
+# a local copy with: nix-store --add-fixed sha256 ServerFiles-1.2.0.zip
 {
   config,
   pkgs,
