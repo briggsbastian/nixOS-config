@@ -486,6 +486,151 @@ commands that emit feedback, and most mod commands do not. Closing this properly
 needs a mod. Written down so it is a known gap rather than a false sense of
 coverage.
 
+## Cobblemon player data
+
+hacktop is a laptop with a dead battery: on 2026-08-04 11:09:48 it lost power at 3%
+with no ride-through. The journal stops mid-line — no shutdown sequence, no kernel
+message, no OOM. Cobblemon was mid-write for the one player online (br1gg_s,
+`525337e6-f77e-413a-8e56-c7d81899a5f5`), which is exactly why only that player's
+data broke. At the next login (11:31:40) it logged `.old File cobblemonplayerdata
+for 525337e6-... is corrupt or missing. Data is lost`, and the same for `pokedex`
+and `cobblenav/spawndata`. In game: the Pokedex count in the chat prefix went
+127 -> 0 and Cobblemon believed the player had never picked a starter.
+
+### Diagnose from the journal, never from the files
+
+**By the time you look, the files are healthy and normally sized** — Cobblemon writes
+fresh default data over what it could not read, so there is no corrupt file left to
+find. The only evidence is in the log. The searchable string is `Data is lost`.
+
+`deploy` is in the `systemd-journal` group, so this needs no sudo — but run it over
+plain ssh, not `colmena exec`, which wraps the command in sudo and fails.
+
+```sh
+ssh deploy@192.168.1.26
+journalctl -u minecraft-server-atmons --since 2026-08-04 | grep 'Data is lost'
+journalctl -u minecraft-server-atmons --since 2026-08-04 | grep 'UUID of player'
+```
+
+The same line is logged for a first-time joiner (the file is legitimately absent —
+confirmed for XSparebircHX, whose `UUID of player <name> is <uuid>` line landed four
+seconds earlier) and for mod fake-players (version-3, name-based UUIDs that never
+authenticate). So correlate every `Data is lost` UUID against the `UUID of player`
+lines: a real loss belongs to a player who authenticated *before* today.
+
+### Layout
+
+`<world>/<store>/<first 2 chars of uuid>/<uuid>.<ext>`, the shard coming from
+`substring(0, 2)` in Cobblemon's `FileBasedPlayerDataStoreBackend`. Extensions
+differ per store, and getting one wrong silently restores nothing:
+
+| Store | Extension | Holds |
+|---|---|---|
+| `cobblemonplayerdata` | `.json` | starter flags + `starterUUID`, `keyItems`, `battleTheme`, `extraData`, `advancementData` (all the lifetime counters) |
+| `pokedex` | `.nbt` | per species -> per form: genders, `seenShinyStates`, aspects, knowledge (`NONE`/`ENCOUNTERED`/`CAUGHT`) — records things merely *seen*, not just caught |
+| `cobblenav/spawndata` | `.nbt` | cobblenav spawn state |
+
+None of `advancementData` is recoverable by playing — `totalCaptureCount`,
+`totalEggsCollected`/`Hatched`, `totalEvolvedCount`, `totalBattleVictoryCount` plus
+the PvP/PvW/PvN splits, `totalShinyCaptureCount`, `totalTradedCount`,
+`totalTypeCaptureCounts`, `totalDefeatedCounts`, `aspectsCollected` all only count
+forward.
+
+Each file has a `.old` sibling (Cobblemon's own fallback) and may have a `.tmp`.
+**Write both the live file and its `.old`**, with the server stopped: restore only
+the live file and a later parse failure drops you straight back to the reset state,
+and Cobblemon holds player data in memory and rewrites it on save/logout, so a
+restore under a running server is overwritten.
+
+### Restore
+
+This needs real root on the box. `deploy` cannot do it — the world is 0700
+minecraft, the NAS backup dir is 0700 root, the host key is root-only, and
+`colmena exec` wraps commands in a sudo scoped to activation binaries only
+(`modules/deploy-user.nix`). Use `sudo bash`, not the login shell: under zsh an
+unmatched glob aborts the command instead of passing through.
+
+Backups are `minecraft-backup.nix`'s dailies, 14 kept, members prefixed `atmons/`.
+Decrypt on hacktop with its own host key; `age` isn't on PATH, take it from the
+closure. One decrypt pass over ~8 GB takes several minutes, so extract everything
+you want in that single pass.
+
+```sh
+sudo bash
+uuid=525337e6-f77e-413a-8e56-c7d81899a5f5; shard=${uuid:0:2}
+w=/srv/minecraft/atmons/world          # the stores live under world/, not the server root
+age=$(ls -d /nix/store/*-age-*/bin/age | head -1)
+mkdir -p /root/cobblemon-restore && cd /root/cobblemon-restore
+
+systemctl stop minecraft-server-atmons
+
+# snapshot first - this is the undo
+tar -cf pre-restore.tar -C "$w" \
+  cobblemonplayerdata/$shard pokedex/$shard cobblenav/spawndata/$shard
+
+# archive members are prefixed atmons/world/ - tar reports a missing member as
+# "Not found in archive", which reads like a bad backup rather than a bad path
+$age -d -i /etc/ssh/ssh_host_ed25519_key \
+    /mnt/nas/_backups/minecraft/atmons-world-<ts>.tar.age \
+  | tar -xvf - atmons/world/cobblemonplayerdata/$shard/$uuid.json \
+               atmons/world/pokedex/$shard/$uuid.nbt \
+               atmons/world/cobblenav/spawndata/$shard/$uuid.nbt
+
+# straight-restore the two NBT stores, live file + .old
+for f in pokedex/$shard/$uuid.nbt cobblenav/spawndata/$shard/$uuid.nbt; do
+  install -o minecraft -g minecraft -m 0660 atmons/world/$f "$w/$f"
+  install -o minecraft -g minecraft -m 0660 atmons/world/$f "$w/$f.old"
+done
+```
+
+The NBT stores get a straight restore on purpose: nested form records, enum
+knowledge values and a MoLang `VariableStruct` mean a hand-merge risks a file
+Cobblemon rejects — putting you back at zero — for little payoff (the post-reset
+dex was 2 KB against the backup's 58 KB).
+
+### Merge cobblemonplayerdata.json, don't just restore it
+
+It's plain JSON with well-defined merge semantics, and the post-reset counters
+restart at zero, so they are pure increments: adding them to the backup totals
+reconstructs the true value *and* keeps the play since the reset. A straight
+restore throws the latter away.
+
+| Field | Rule |
+|---|---|
+| `starterPrompted`, `starterLocked`, `starterSelected` | OR — the backup's `true` wins |
+| `starterUUID` | from the backup |
+| `keyItems` | set union |
+| scalar `total*Count` | sum |
+| `totalTypeCaptureCounts`, `totalDefeatedCounts` | per-key sum |
+| `aspectsCollected` | per-species set union |
+
+```
+backup   totalBattleVictoryCount 732   totalCaptureCount 124   starterSelected true
+current  totalBattleVictoryCount   7   totalCaptureCount   6   starterSelected false
+merged   totalBattleVictoryCount 739   totalCaptureCount 130   starterSelected true
+```
+
+Install the merged file to both `$w/cobblemonplayerdata/$shard/$uuid.json` and its
+`.old`, same `install -o minecraft -g minecraft -m 0660`.
+
+No merge recovers everything: play between the backup timestamp and the crash is in
+neither file.
+
+### Verify
+
+```sh
+systemctl start minecraft-server-atmons
+journalctl -u minecraft-server-atmons -b | grep 'Data is lost'   # want nothing
+journalctl -u minecraft-server-atmons -b | grep 'joined the game' | tail
+nix run nixpkgs#mcstatus -- 192.168.1.26:25565 status            # also lists players
+```
+
+A join renders as `<[N] name> joined the game`, N being the dex count — a useful
+at-a-glance check, but players without a nickname render as `[N] name` with no angle
+brackets, so don't write a grep that requires them. Use `mcstatus` rather than a
+`/dev/tcp` probe to ask whether the server is up; the latter is unreliable from a
+sandboxed shell.
+
 ## Rollback
 
 ```sh
