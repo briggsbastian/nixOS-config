@@ -74,6 +74,23 @@
       url = "git+https://git.mgmt.lan/briggs/newspaper.git?ref=main";
       inputs.nixpkgs.follows = "nixpkgs-stable";
     };
+    # Budget tracker: models the biweekly pay cycle against calendar-dated fixed
+    # costs and reports what is actually left over each paycheck. Runs on mgmt
+    # behind nginx at budget.mgmt.lan (hosts/lan/mgmt/modules/budget-tracker.nix).
+    budget-tracker = {
+      # https, not ssh, for the same reason as newspaper and isc above: nix
+      # fetches inputs as its own user and CI has no Forgejo SSH identity. The
+      # repo must be readable without credentials; hosts trust the internal CA
+      # (modules/internal-ca.nix), so nothing else is needed.
+      #
+      # Also keeps it inside lock-bump.yml's auto-update set, which excludes
+      # ssh:// inputs.
+      url = "git+https://git.mgmt.lan/briggs/budget_tracker.git?ref=main";
+      # The app's own flake pins nixos-25.11; following stable builds it against
+      # the same 26.05 tree as the rest of the servers and adds no extra nixpkgs
+      # to this lock.
+      inputs.nixpkgs.follows = "nixpkgs-stable";
+    };
     # Infrastructure Security Controller: scans each host's closure for known
     # vulnerabilities and turns the delta across a flake.lock bump into a PR
     # comment. Pinned here rather than `nix run`-ed unpinned in CI so the lock

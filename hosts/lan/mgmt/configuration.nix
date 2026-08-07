@@ -19,6 +19,7 @@
     ./modules/snipe-it.nix
     ./modules/backup.nix
     ./modules/newspaper.nix
+    ./modules/budget-tracker.nix
     ./modules/launchpad.nix
     ./modules/wg-cloud1.nix
     ./modules/suricata.nix
