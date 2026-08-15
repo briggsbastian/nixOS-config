@@ -47,6 +47,12 @@
   # the fold-in without one). All users here are declarative, so false is right.
   users.mutableUsers = false;
 
+  # Opted out of the fleet-wide `briggs` (modules/users.nix): `playground` below
+  # already holds uid 1000 here, and this host is on its way out of the flake
+  # anyway (it is stock Proxmox now - see chore/retire-playground). Not worth a
+  # migration; it stays evaluable for `nix flake check` and nothing more.
+  alcove.fleetUsers.enable = false;
+
   users.users.playground = {
     isNormalUser = true;
     description = "playground";

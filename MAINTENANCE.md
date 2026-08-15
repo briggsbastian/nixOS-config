@@ -83,6 +83,34 @@ Add a host: get its recipient with
 A host's age identity is its `/etc/ssh/ssh_host_ed25519_key`, so re-imaging a box
 loses access to its secrets unless you keep that key or re-key the files.
 
+## Logins
+
+One admin account fleet-wide: `briggs`, pinned to uid 1000 by `modules/users.nix`.
+Colmena still deploys as the separate unprivileged `deploy` (uid 1001) — that path
+never depends on `briggs` working.
+
+`users.mutableUsers = false` on these hosts, so **`passwd` does not survive a
+deploy**. Change the login/sudo password through sops:
+
+```sh
+mkpasswd -m yescrypt                                 # type the new password
+sops set secrets/<host>.yaml '["briggs_hashed_password"]' '"<hash>"'
+colmena apply --on <host>
+```
+
+The hash is per host, so changing it everywhere is that loop over mgmt, hacktop
+and cloud1. sops-nix validates the key exists at *build* time — a missing
+`briggs_hashed_password` fails the build rather than deploying an account you
+can't sudo with.
+
+Locked out? `deploy` has key-only SSH and scoped NOPASSWD sudo on
+`switch-to-configuration`, which is enough to roll back — see [Rollback](#rollback).
+That is the whole recovery path on cloud1, which is off-LAN with no console.
+
+Not yet fleet-wide: `media` and `playground` opt out (`alcove.fleetUsers.enable =
+false`). On media the *arr stack runs as a `media` service account sitting on uid
+1000 — the same number the NAS owns its files with — so it needs its own migration.
+
 ## TLS
 
 step-ca issues 90-day certs for `*.mgmt.lan`; nginx renews them via lego timers.

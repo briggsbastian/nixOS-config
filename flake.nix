@@ -192,6 +192,7 @@
       serverModules = name: meta: [
         (mkVersionInfo nixpkgs-stable)
         ./modules/common.nix
+        ./modules/users.nix # pinned-UID `briggs`; media/playground opt out (Phase B)
         ./modules/internal-ca.nix
         ./modules/siem-lite.nix
         ./modules/audit.nix # inert unless the host sets alcove.audit.enable
@@ -274,6 +275,7 @@
         (mkVersionInfo nixpkgs-mgmt) # mgmt's own pin, not nixpkgs-stable
         ./modules/config-revision.nix # mgmt skips common.nix, so import it directly
         ./modules/deploy-user.nix
+        ./modules/users.nix # pinned-UID `briggs` (brings its own programs.zsh - mgmt has none)
         sops-nix.nixosModules.sops # mgmt needs sops (Grafana admin password)
         ./modules/siem-lite.nix # mgmt is the central Loki/Grafana/Alertmanager server
         ./modules/audit.nix # inert unless the host sets alcove.audit.enable
@@ -336,6 +338,11 @@
         # reports healthy and is connected to nothing. Asserts runtime behaviour
         # only: rules loaded, events emitted, journald actually receiving them.
         audit = import ./tests/audit.nix { inherit pkgs; };
+        # uid 1000 changes hands from each host's own admin to `briggs` in a
+        # single activation. Whether NixOS frees the old uid before allocating
+        # the new one is not obvious, and cloud1 has no console to recover from
+        # a half-applied switch.
+        fleet-users = import ./tests/fleet-users.nix { inherit pkgs; };
         # fmt + lint gate. Fails on an unformatted tree -- the `style: nix fmt the
         # tree` commit is what makes it green (drop that commit and this goes red).
         formatting = treefmtEval.config.build.check self;

@@ -70,18 +70,17 @@
 
   # --- Break-glass admin ----------------------------------------------------
   # Colmena deploys as the unprivileged `deploy` user (modules/deploy-user.nix).
-  # This is a separate human login for recovery: wheel sudo (password-gated),
-  # key-only like the rest of the fleet. This desktop's key, so `ssh cloud1@<ip>`
-  # works from the control node.
-  users.users.cloud1 = {
-    isNormalUser = true;
-    description = "cloud1 admin";
-    shell = pkgs.zsh;
-    extraGroups = [ "wheel" ];
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOdyXoksJm43MuCM6ZSKowV5N3tP94bMcjcyONvb3fzL briggs@nixos"
-    ];
-  };
+  # The separate human login for recovery is now `briggs` (modules/users.nix,
+  # uid 1000), replacing the host-named `cloud1` account that held uid 1000 here:
+  # wheel sudo (password-gated, hash from sops), key-only like the rest of the
+  # fleet. `ssh cloud1@<ip>` from the control node becomes `ssh briggs@<ip>`.
+  #
+  # This is the one host where getting it wrong is expensive - it is off-LAN and
+  # there is no console. The recovery path if the password hash is bad: the
+  # deploy user still has key-only SSH and scoped NOPASSWD sudo on
+  # switch-to-configuration, which is enough to roll back to the previous
+  # generation. Do not remove that safety net.
+  alcove.fleetUsers.passwordSopsFile = ../../../secrets/cloud1.yaml;
 
   # First install is 25.11 (matches the fleet's nixpkgs-stable). Fixed - tracks
   # state-compat, not package versions.

@@ -46,6 +46,21 @@
   };
 
   # --- User ------------------------------------------------------------------
+  # Opted out of the fleet-wide `briggs` (modules/users.nix) until Phase B.
+  #
+  # This is not cosmetic: `media` below is not just a login, it is the service
+  # account the *arr stack runs as (arr.nix sets user = "media" for sonarr,
+  # radarr, bazarr, jellyfin and nzbget), and it sits on uid 1000 - the same
+  # number the NAS export at 192.168.1.213 owns its files with. briggs also wants
+  # uid 1000, so both cannot live here, and moving *either* off 1000 by itself
+  # breaks NFS owner-match on the library.
+  #
+  # Phase B: give the *arr services their own account, join it to gid 1000 (the
+  # library is mode 775, so group access is enough), chown /var/lib/{sonarr,...},
+  # then drop this line. Needs a quiet window - nzbget mid-download is how you
+  # corrupt a queue.
+  alcove.fleetUsers.enable = false;
+
   users.users.media = {
     isNormalUser = true;
     description = "media";

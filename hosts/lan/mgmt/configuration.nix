@@ -49,15 +49,17 @@
   time.timeZone = "America/Los_Angeles";
   i18n.defaultLocale = "en_US.UTF-8";
 
-  users.users.mgmt = {
-    isNormalUser = true;
-    description = "mgmt";
-    extraGroups = [
-      "networkmanager"
-      "wheel"
-      "docker"
-    ];
-  };
+  # The admin login is `briggs` (modules/users.nix, uid 1000) - the same account
+  # and number as every other host. It replaces the old host-named `mgmt` user,
+  # which held uid 1000 here and owned nothing but /home/mgmt. That directory is
+  # left behind on purpose: NixOS does not delete home dirs, and after this
+  # deploy it reads as owned by briggs (same uid). Remove it by hand once you
+  # have confirmed there is nothing in it worth keeping.
+  alcove.fleetUsers.passwordSopsFile = ../../../secrets/mgmt.yaml;
+  users.users.briggs.extraGroups = [
+    "networkmanager"
+    "docker"
+  ];
 
   # mgmt skips common.nix, so wire sops here (for the grafana password below)
   sops.age.sshKeyPaths = [ "/etc/ssh/ssh_host_ed25519_key" ];

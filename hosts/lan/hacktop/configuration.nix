@@ -100,21 +100,14 @@
   nixpkgs.config.allowUnfree = true;
 
   # --- User ------------------------------------------------------------------
-  # Login user matches the box + ~/.ssh/config alias. Key-only (see common.nix),
-  # this desktop's key, so `ssh hacktop@<ip>` and Colmena keep working. wheel sudo
-  # still needs a password (set with passwd).
-  users.users.hacktop = {
-    isNormalUser = true;
-    description = "hacktop";
-    shell = pkgs.zsh;
-    extraGroups = [
-      "networkmanager"
-      "wheel"
-    ];
-    openssh.authorizedKeys.keys = [
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOdyXoksJm43MuCM6ZSKowV5N3tP94bMcjcyONvb3fzL briggs@nixos"
-    ];
-  };
+  # The admin login is `briggs` (modules/users.nix, uid 1000), replacing the old
+  # host-named `hacktop` user that held uid 1000 here. `ssh hacktop@<ip>` becomes
+  # `ssh briggs@<ip>` - there is no ~/.ssh/config alias for this box on the
+  # control node, so the change is only in what you type. Password comes from
+  # sops now, not `passwd`. /home/hacktop is left behind - delete it once you
+  # have checked it.
+  alcove.fleetUsers.passwordSopsFile = ../../../secrets/hacktop.yaml;
+  users.users.briggs.extraGroups = [ "networkmanager" ];
 
   # --- Staging / CI build tooling -------------------------------------------
   # Just enough to stage fleet configs and drive builds by hand for now; the
@@ -138,12 +131,12 @@
   # --- Secrets (sops-nix) ----------------------------------------------------
   # Smoke-test secret proving the sops-nix -> Colmena -> /run/secrets pipeline.
   # Decrypts at activation via this host's SSH host key (see common.nix). Owner is
-  # `hacktop` only so it's verifiable without root; real secrets get their
+  # `briggs` only so it's verifiable without root; real secrets get their
   # service's user. Replace demo_secret with real ones (CI runner token, cache
   # signing key) as they appear.
   sops.defaultSopsFile = ../../../secrets/hacktop.yaml;
   sops.secrets.demo_secret = {
-    owner = "hacktop";
+    owner = "briggs";
   };
 
   # ship the journal to central Loki on mgmt

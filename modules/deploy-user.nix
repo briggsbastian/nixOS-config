@@ -17,6 +17,12 @@ _:
 {
   users.users.deploy = {
     isNormalUser = true;
+    # Pinned so the deploy identity is one number fleet-wide rather than whatever
+    # auto-allocation happened to pick per host. Verified 2026-08-15: mgmt,
+    # hacktop, media and cloud1 had all independently landed on 1001, so writing
+    # it down is a no-op on every existing box - it just stops a future host from
+    # drifting. See modules/users.nix for the same treatment of `briggs`.
+    uid = 1001;
     description = "Colmena deploy user";
     # Read-only journal access so deploys can be observed/debugged remotely.
     extraGroups = [ "systemd-journal" ];
