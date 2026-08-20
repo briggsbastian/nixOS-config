@@ -239,7 +239,7 @@ Loki's data (`mgmt:/var/lib/loki`) isn't backed up; it refills from the journals
 `hosts/lan/hacktop/minecraft-backup.nix` runs daily at 04:00 **local** time (not
 UTC — `time.timeZone` is `America/Los_Angeles`, and systemd calendar specs use
 the system timezone). It pauses saving, flushes the world, tars it through `age`
-to the NAS, keeps the newest 14, then re-enables saving.
+to the NAS, prunes old archives, then re-enables saving.
 
 Unlike mgmt's backup, these archives carry **two** age recipients: the admin key
 and hacktop's own SSH host key. That second one is what lets hacktop verify its
@@ -251,6 +251,7 @@ historical worlds, which was judged an acceptable price for verifiability.
 # proof, not vibes: written only on a successful run
 ssh deploy@192.168.1.26 cat /var/lib/node-exporter-textfile/minecraft_backup.prom
 #   minecraft_backup_quiesced 0  means the archive may catch a partial save
+#   minecraft_backup_store_free_bytes  is the NAS's only capacity metric anywhere
 ssh deploy@192.168.1.26 sudo systemctl start minecraft-backup-verify   # verify on demand
 
 # restore, on the desktop (stop the server first):
@@ -258,7 +259,86 @@ age -d -i ~/.config/sops/age/keys.txt atmons-world-<ts>.tar.age | sudo tar -C /s
 ```
 
 Alerts: `MinecraftBackupStale`, `MinecraftBackupNotQuiesced`,
-`MinecraftBackupShrank`, `MinecraftBackupUnverified`.
+`MinecraftBackupShrank`, `MinecraftBackupUnverified`, `NasBackupStoreLow`,
+`NasBackupStoreFillingUp`.
+
+#### Retention: 3 daily + 1 weekly + 1 monthly
+
+It was 14 dailies until 2026-08-20. At ~12.9 GB an archive that is ~180 GB of
+NAS for one world, and the share was found at **94% full — 52.5 GiB free of
+853 GiB**, with a second Minecraft world still to come. Nothing alerted on that,
+because the NAS is unmanaged and `NodeDiskFull` excludes `fstype=~"nfs.*"` on
+every client; `NasBackupStore*` above exists so it cannot happen quietly twice.
+
+`hosts/lan/hacktop/minecraft-prune.nix` now does grandfather-father-son:
+
+| tier | keeps | how far back |
+|---|---|---|
+| daily | newest 3 | 0–2 days |
+| weekly | newest archive of the newest ISO week **strictly before** the newest archive's own week | 1–7 days |
+| monthly | same, over calendar months | 1–31 days |
+
+At most **5 archives, ~65 GB** — an upper bound, not a target: on the days last
+week's or last month's last archive is still inside the daily window it lands on
+a file the daily tier already keeps, and the set is smaller. Two worlds is at
+most 10 archives, and the second one's archives start near zero and take months
+to reach ATMons' size.
+
+Two things to know before touching it:
+
+- **`.partial` must stay invisible to retention.** In-flight archives are
+  `.<prefix>-<ts>.tar.age.partial`; the pruner's candidate list is built with a
+  shell glob, and shell globs do not match dotfiles. A truncated archive must
+  never be selectable — not kept as though complete, not deleted as surplus.
+- **"Now" is the newest archive's bucket, not the wall clock.** Retention is a
+  pure function of the directory listing, so a dry run and the real run agree,
+  and a week of failed backups keeps *more* history rather than sliding the
+  window off the end of what is actually there.
+
+The horizon is not a guaranteed 30 days: for a day or two after a month turns
+over, last month's last archive is still a daily and so consumes the monthly
+slot. That makes this never worse than a flat `keep = 3` and usually far better.
+`keepMonthly = 2` buys the guarantee for one more archive (~13 GB) — worth doing
+once the NAS has headroom.
+
+#### Reclaiming the old 14-day set
+
+New retention only prunes going forward. The ~141 GB already on the NAS needs
+one explicit run, and it is the **same code path** the timer uses, so a dry run
+here is an exact preview of what the policy will do. Needs real root: the backup
+directory is `0700 root` (`deploy` cannot read it, and `colmena exec`'s sudo is
+scoped to activation binaries only).
+
+```sh
+ssh hacktop@192.168.1.26
+sudo bash                        # not the login shell: zsh aborts on an unmatched glob
+
+df -h /mnt/nas                                   # before
+ls -la /mnt/nas/_backups/minecraft/
+
+# DRY RUN FIRST. Deletes nothing; prints keep/WOULD DELETE for every archive.
+minecraft-prune -n /mnt/nas/_backups/minecraft atmons-world 3 1 1
+
+# Read that list. Then, and only then:
+minecraft-prune    /mnt/nas/_backups/minecraft atmons-world 3 1 1
+df -h /mnt/nas                                   # after
+```
+
+`minecraft-prune` is on PATH because `minecraft-backup.nix` puts it there, and
+it is the same store path the unit runs — unlike `age`, which the restore
+section below has to dig out of the closure.
+
+Do this **after** the deploy that ships the new `minecraft-prune`, so the store
+path exists and the one-off matches what the timer will do. Running it while the
+nightly backup is in flight is safe — the `.partial` is invisible to it — but
+`systemctl list-timers minecraft-backup` first is cheap.
+
+Then confirm the next nightly run agrees, rather than assuming it:
+
+```sh
+sudo systemctl start minecraft-backup      # ~4 min: save-off is held for the whole tar
+journalctl -u minecraft-backup -o cat | grep '^prune:'
+```
 
 ## The ATMons Minecraft server
 
@@ -550,7 +630,11 @@ minecraft, the NAS backup dir is 0700 root, the host key is root-only, and
 (`modules/deploy-user.nix`). Use `sudo bash`, not the login shell: under zsh an
 unmatched glob aborts the command instead of passing through.
 
-Backups are `minecraft-backup.nix`'s dailies, 14 kept, members prefixed `atmons/`.
+Backups are `minecraft-backup.nix`'s archives, members prefixed `atmons/`. Since
+2026-08-20 retention is 3 daily + 1 weekly + 1 monthly, not 14 dailies — check
+`ls /mnt/nas/_backups/minecraft/` for what you actually have before planning a
+restore around a date, because the usable rollback horizon is now typically two
+to four weeks and occasionally as short as the daily window.
 Decrypt on hacktop with its own host key; `age` isn't on PATH, take it from the
 closure. One decrypt pass over ~8 GB takes several minutes, so extract everything
 you want in that single pass.
