@@ -10,99 +10,84 @@
 - Slideout shows ALL services; probed ones get uptime bars, non-probed show "—"
 - Homepage tile layout (no orbit animation)
 
-## What was done before this session
-- Steps 1-7 already completed in interactive chat:
-  1. Dropped Hyprland session (flake target, system config, home-hypr.nix, dotfiles/hypr/)
-  2. Disabled Flatpak auto-updates
-  3. Dropped AppImage binfmt
-  4. Removed Claude Desktop (flake input + package)
-  5. Moved deploy tools (sops, ssh-to-age) from system packages to devShell only
-  6. Dropped NAS mount (nas.nix)
-  7. Retired playground (host, secrets, DNS, monitoring, docs, CI matrices, zsh aliases)
+## Phase 1: Branch cleanup — COMPLETE
 
-## Phase 1: Branch cleanup
+### Committed and merged
+- `feat/desktop-cleanup` — hyprland, flatpak auto-update, appimage, claude-desktop, nas mount, deploy tools, playground removal → merged into main
+- `feat/fleet-users` — unified `briggs` at uid 1000 → already in main (subsumed)
+- `feat/atmons-roles` — Minecraft features → merged into main
+- `fix/mc-backup-retention` — NAS monitoring, backup pruning → merged into main
+- `feat/budget-tracker` — budget tracker → already in main (subsumed by atmons-roles merge)
 
-### To commit
-- All the changes from steps 1-7 above (currently uncommitted in working tree)
-- Branch: `feat/desktop-cleanup`
+### Abandoned
+- `feat/sso-authelia` — deleted (CA trust prep for unfinished SSO)
 
-### To merge into main
-- `chore/retire-playground` — moves playground to `attic/` (cleaner than our manual delete)
-- `feat/fleet-users` — unified `briggs` at uid 1000
-- `feat/atmons-roles` — Minecraft: roles, /color, console-to-journal, heap sizing, backups, VM tests, monitoring, proxy metrics
-- `fix/mc-backup-retention` — NAS monitoring at 94%, backup pruning
-- `feat/budget-tracker` — budget tracker at `budget.mgmt.lan`
-
-### To abandon
-- `feat/sso-authelia` — just CA trust prep for unfinished SSO
-
-### To keep (HOLD)
+### Kept (HOLD)
 - `fix/hacktop-ci-oom-priority` — marked "HOLD until measured"
 
-### To delete (merged branches)
-- Local: `feat/loki-crashloop-rule`, `feat/siem-auditd`, `feat/siem-drop-log-noise`, `fix/alloy-eve-log-tail`, `fix/recyclarr-v8-config`, `fix/suricata-alert-actionable-only`, `fix/suricata-ics-rules`, `fix/suricata-restart-on-ruleset-change`, `fix/suricata-trim-sources`, `migrate/wazuh-to-loki`
-- Remote: `origin/feat/isc-audit-schedule`, `origin/feat/isc-state-and-alerts`, `origin/fix/mgmt-ssh-password-auth`, `origin/fix/newspaper-https`, `origin/isc-state`, `origin/automated/flake-lock-bump`
+### Deleted branches
+- Local deleted: `feat/loki-crashloop-rule`, `feat/siem-auditd`, `feat/siem-drop-log-noise`, `fix/alloy-eve-log-tail`, `fix/recyclarr-v8-config`, `fix/suricata-alert-actionable-only`, `fix/suricata-ics-rules`, `fix/suricata-restart-on-ruleset-change`, `fix/suricata-trim-sources`, `migrate/wazuh-to-loki`, `feat/fleet-users`, `chore/retire-playground`, `feat/atmons-roles`, `feat/budget-tracker`, `feat/desktop-cleanup`, `fix/desktop-oom-swap`, `fix/mc-backup-retention`, `feat/sso-authelia`, `worktree-agent-*`
+- Remote deleted: `automated/flake-lock-bump`, `feat/isc-audit-schedule`, `feat/isc-state-and-alerts`, `fix/mgmt-ssh-password-auth`, `fix/newspaper-https`, `isc-state`, `feat/loki-crashloop-rule`, `feat/siem-auditd`, `feat/siem-drop-log-noise`, `fix/alloy-eve-log-tail`, `fix/recyclarr-v8-config`, `fix/suricata-alert-actionable-only`, `fix/suricata-ics-rules`, `fix/suricata-restart-on-ruleset-change`, `fix/suricata-trim-sources`, `chore/retire-playground`, `feat/atmons-roles`, `feat/budget-tracker`, `fix/desktop-oom-swap`
 
-### Worktrees to delete
+### Worktrees deleted
 - `worktree-agent-a323dcd65704bdeaf`
 - `worktree-agent-a4badb684cb3a502a`
 
-## Phase 2: Landing page (single pane of glass)
+### Final branch state
+- `main` (current, pushed to origin)
+- `fix/hacktop-ci-oom-priority` (local only, HOLD)
 
-### New files
-- `hosts/lan/mgmt/modules/landing-page.nix` — nginx vhost + static site
-- `hosts/lan/mgmt/modules/landing-page/site/index.html` — the page
-- `hosts/lan/mgmt/modules/landing-page/site/style.css` — styles
-- `hosts/lan/mgmt/modules/landing-page/site/app.js` — JS logic
+### Commits on main
+```
+ea51f83 mgmt: single pane of glass landing page at mgmt.lan
+a6c6a7c Merge branch 'fix/mc-backup-retention'
+12daaff Merge branch 'feat/atmons-roles'
+31a9c6e desktop: cleanup — drop hyprland, flatpak auto-update, appimage, claude-desktop, nas mount, deploy tools from system packages
+9192564 monitoring: the NAS was watched by nobody, which is how it reached 94%
+8428f6e atmons: 14 dailies is 180 GB of NAS, and the NAS has three weeks left
+```
 
-### Page sections (top to bottom)
-1. **Fleet health** — 4 hosts (mgmt, media, hacktop, cloud1), CPU/mem/disk bars, green/yellow/red
-2. **Active alerts** — count badge + list of firing alerts from Alertmanager API
-3. **Uptime summary** — "All services healthy" or "N degraded" with slideout
-   - Slideout: ALL services, probed ones get uptime bars from `avg_over_time(probe_success{job="blackbox-tls"}[30d])`, non-probed show "—"
+## Phase 2: Landing page — COMPLETE
+
+### New files created
+- `hosts/lan/mgmt/modules/landing-page.nix` — nginx vhost + static site + disables homepage-dashboard
+- `hosts/lan/mgmt/modules/landing-page/site/index.html` — page structure
+- `hosts/lan/mgmt/modules/landing-page/site/style.css` — dark theme styles
+- `hosts/lan/mgmt/modules/landing-page/site/app.js` — JS logic (health, alerts, uptime, tiles, clock)
+
+### Files modified
+- `hosts/lan/mgmt/modules/nginx.nix` — removed `mgmt.lan` proxy, `home.mgmt.lan`, `launchpad.mgmt.lan` vhosts
+- `hosts/lan/mgmt/modules/monitoring.nix` — removed `services.homepage-dashboard` block (~200 lines)
+- `hosts/lan/mgmt/configuration.nix` — replaced `launchpad.nix` import with `landing-page.nix`
+
+### Files deleted
+- `hosts/lan/mgmt/modules/launchpad.nix`
+- `hosts/lan/mgmt/modules/launchpad/` (directory with site/)
+
+### Page layout
+1. **Fleet health** — 4 hosts (mgmt, media, hacktop, cloud1), CPU/mem/disk bars, green(<70%)/yellow(70-85%)/red(>85%)
+2. **Active alerts** — "All clear" or "N firing" with list from Alertmanager API
+3. **Uptime summary** — "All services healthy" or "N services degraded" with click-to-expand slideout
+   - Slideout: ALL services grouped by category, probed ones get uptime bars, non-probed show "—"
    - Red dot on services with issues (probe failing, active alert, or uptime < 95%)
-4. **Service tiles** — hardcoded DATA array, categories: Security, Observability, Infrastructure (includes Budget), Media, Games
+4. **Service tiles** — hardcoded categories: Security, Observability, Infrastructure (includes Budget), Media, Games
 5. **Clock** — top-right
 
 ### API access
-- nginx proxy locations: `/api/prometheus/` → `http://127.0.0.1:9090/`, `/api/alertmanager/` → `http://127.0.0.1:9093/`
-- JS fetches `/api/prometheus/api/v1/query` and `/api/alertmanager/api/v2/alerts`
-- Poll every 30s
-- Graceful degradation: show "—" if API unreachable
-
-### Files to modify
-- `hosts/lan/mgmt/modules/nginx.nix` — change `mgmt.lan` from proxy to static root, remove `home.mgmt.lan`, remove `launchpad.mgmt.lan`
-- `hosts/lan/mgmt/modules/monitoring.nix` — remove `services.homepage-dashboard` block (~200 lines), remove "Lab" section from Homepage services
-- `hosts/lan/mgmt/modules/launchpad.nix` — DELETE
-- `hosts/lan/mgmt/modules/launchpad/` — DELETE
-- `MAINTENANCE.md` — update references
-- `README.md` — update references
-
-### Prometheus queries
-- Fleet CPU: `100 - (avg by(instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)`
-- Fleet memory: `(1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) * 100`
-- Fleet disk: `(1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100`
-- Uptime per target: `avg_over_time(probe_success{job="blackbox-tls"}[30d]) * 100`
-- Current probe status: `probe_success{job="blackbox-tls"}`
-
-### Service list for slideout
-**Probed (have blackbox-tls targets):**
-AdGuard, Grafana, Alertmanager, ntfy, Git, Cache, CA, Status, ntopng, Snipe-IT, Newspaper, Budget
-(NetBox commented out — no probe until re-enabled)
-
-**Not probed (direct IP:port):**
-Jellyfin, Radarr, Sonarr, Prowlarr, Bazarr, NZBGet, Kavita, All the Mons
+- nginx proxies `/api/prometheus/` → `http://127.0.0.1:9090/`
+- nginx proxies `/api/alertmanager/` → `http://127.0.0.1:9093/`
+- JS fetches via same-origin (no CORS issues), polls every 30s
+- Graceful degradation: shows "unavailable" or "—" if API unreachable
 
 ### Verification
-- `nix flake check` passes
-- `colmena apply --on mgmt` deploys
-- Page loads at `https://mgmt.lan` with all sections working
+- `nix flake check` — all checks passed
+- Pushed to origin/main
 
 ## What's next after this session
 - Deploy to mgmt: `colmena apply --on mgmt`
 - Verify landing page at `https://mgmt.lan`
-- Check fleet health bars show correct data
-- Check active alerts widget
-- Check uptime slideout
+- Check fleet health bars show correct data for all 4 hosts
+- Check active alerts widget shows firing alerts
+- Check uptime slideout shows all services with bars/—
 - If any API proxy issues, debug nginx config
 - Consider iterating on the landing page design based on usage
