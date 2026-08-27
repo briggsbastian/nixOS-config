@@ -1,0 +1,197 @@
+{
+  "uid": "atmons-security",
+  "title": "ATMons - Security & Attribution",
+  "tags": ["minecraft", "security", "blue-team"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "1m",
+  "time": { "from": "now-24h", "to": "now" },
+  "templating": { "list": [] },
+  "annotations": { "list": [] },
+  "description": "Attribution for the public Minecraft path. cloud1 masquerades, so the game server sees every player as 10.100.0.1 - the real source address exists only in cloud1's nftables log. The top row is laid out so a timestamp on the right reads across to a source IP on the left.",
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Connection attempts by source IP (cloud1)",
+      "description": "From nftables `log prefix \"mc-conn \"` on the forward hook - the only point where the real client address still exists. Counts ATTEMPTS, including ones the throttle then drops, which is what an investigation wants. The log rule is itself rate-limited, so during a heavy flood this undercounts by design.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum", "max"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "sum by (src) (count_over_time({host=\"cloud1\"} |= `mc-conn ` | regexp `SRC=(?P<src>[0-9.]+)` [5m]))",
+          "legendFormat": "{{src}}"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Joins and leaves (hacktop)",
+      "description": "Read across from the panel on the left: match a join here to a source IP there by timestamp. Correlation only - with several people joining within the same few seconds this narrows the field, it does not prove identity.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 0 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["sum"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "sum(count_over_time({unit=\"minecraft-server-atmons.service\"} |= `joined the game` [5m]))",
+          "legendFormat": "joins"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "sum(count_over_time({unit=\"minecraft-server-atmons.service\"} |= `left the game` [5m]))",
+          "legendFormat": "leaves"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "type": "logs",
+      "title": "Connection attempts, raw (cloud1)",
+      "description": "The investigation surface. SRC= is the real client address; DPT=25565 is post-DNAT.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 9 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "{host=\"cloud1\"} |= `mc-conn `"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "type": "logs",
+      "title": "Joins, leaves and disconnects, raw (hacktop)",
+      "description": "The login line carries the post-masquerade address (always 10.100.0.1) - that is the whole reason the cloud1 panel exists.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 9 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "{unit=\"minecraft-server-atmons.service\"} |~ `joined the game|left the game|logged in with entity id|lost connection`"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Throttle drops (cloud1 rate limiter)",
+      "description": "Drives MinecraftConnectionFlood. Non-zero means a single address is opening more than 10 new connections a minute, which a human reconnecting does not do. Counter resets on every ruleset reload (deploy or reboot); rate() handles that.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 19 },
+      "fieldConfig": { "defaults": { "unit": "pps", "custom": { "drawStyle": "line", "fillOpacity": 30 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "rate(minecraft_proxy_ratelimit_dropped_packets_total[5m])",
+          "legendFormat": "dropped/s"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Tick lag events",
+      "description": "Drives MinecraftTickLag (fires > 10 in 15m). Resource exhaustion is the shape an attack on a modded server actually takes.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 19 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "bars", "fillOpacity": 60 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "sum(count_over_time({unit=\"minecraft-server-atmons.service\"} |= `Can't keep up` [5m]))",
+          "legendFormat": "events"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Worst stall (ms behind)",
+      "description": "Extracted from the server's own \"Running Nms behind\" text. Baseline on this pack peaks around 8.7s, clustered on startup and joins.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 19 },
+      "fieldConfig": { "defaults": { "unit": "ms", "custom": { "drawStyle": "points", "fillOpacity": 0, "pointSize": 6 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "single" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "max_over_time({unit=\"minecraft-server-atmons.service\"} |= `Can't keep up` | regexp `Running (?P<ms>[0-9]+)ms` | unwrap ms [5m])",
+          "legendFormat": "ms behind"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "type": "logs",
+      "title": "Chat",
+      "description": "The only record of what was said - there is no other. Chat uses DOUBLE angle brackets (<<[81] name>> text); single brackets are advancements, so this filter deliberately matches '<<'.",
+      "datasource": { "type": "loki", "uid": "loki" },
+      "gridPos": { "h": 9, "w": 12, "x": 0, "y": 27 },
+      "options": { "showTime": true, "wrapLogMessage": true, "sortOrder": "Descending" },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "loki", "uid": "loki" },
+          "queryType": "range",
+          "expr": "{unit=\"minecraft-server-atmons.service\"} |= `<<`"
+        }
+      ]
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Public path reachability and backup age",
+      "description": "probe_success is the blackbox TCP check against play.briggsbastian.com:24799. Backup age in hours drives MinecraftBackupStale at 26h.",
+      "datasource": { "type": "prometheus", "uid": "prometheus" },
+      "gridPos": { "h": 9, "w": 12, "x": 12, "y": 27 },
+      "fieldConfig": { "defaults": { "unit": "short", "custom": { "drawStyle": "line", "fillOpacity": 10 } }, "overrides": [] },
+      "options": { "legend": { "displayMode": "table", "placement": "right", "calcs": ["lastNotNull"] }, "tooltip": { "mode": "multi" } },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "probe_success{job=\"blackbox-minecraft\"}",
+          "legendFormat": "public path up"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "(time() - minecraft_backup_last_success_timestamp_seconds) / 3600",
+          "legendFormat": "backup age (h)"
+        },
+        {
+          "refId": "C",
+          "datasource": { "type": "prometheus", "uid": "prometheus" },
+          "expr": "minecraft_backup_quiesced",
+          "legendFormat": "last backup quiesced"
+        }
+      ]
+    }
+  ]
+}

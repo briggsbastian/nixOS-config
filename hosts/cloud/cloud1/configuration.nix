@@ -17,6 +17,7 @@
     ./disko.nix
     ./hardware-configuration.nix
     ./proxy.nix
+    ./proxy-metrics.nix
   ];
 
   networking.hostName = "cloud1";

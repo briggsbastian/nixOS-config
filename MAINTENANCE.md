@@ -225,6 +225,7 @@ State that isn't in the repo and would be lost on a reinstall:
 | step-ca root + intermediate | `mgmt:/var/lib/private/step-ca/` | Lose it and every device re-trusts. Auto-backed-up — **verify, don't assume** (below). |
 | SSH host keys | `/etc/ssh/ssh_host_*` | The sops identity; keep across re-images. |
 | sops secrets | `secrets/*.yaml` | Safe in git (encrypted). |
+| ATMons world | `hacktop:/srv/minecraft/atmons` | Players' work, and the only griefing rollback on an open server. Daily 04:00 local, quiesced, auto-verified monthly. |
 
 `backup.nix` runs daily at 03:30: it streams `/var/lib/private/step-ca`,
 `/var/lib/mgmt-secrets` and — when NetBox is enabled — `/var/backup/postgresql`
@@ -259,6 +260,409 @@ stream — treat any archive dated before 2026-07-24 as unverified until you hav
 listed it with the command above.
 
 Loki's data (`mgmt:/var/lib/loki`) isn't backed up; it refills from the journals.
+
+### The ATMons world
+
+`hosts/lan/hacktop/minecraft-backup.nix` runs daily at 04:00 **local** time (not
+UTC — `time.timeZone` is `America/Los_Angeles`, and systemd calendar specs use
+the system timezone). It pauses saving, flushes the world, tars it through `age`
+to the NAS, keeps the newest 14, then re-enables saving.
+
+Unlike mgmt's backup, these archives carry **two** age recipients: the admin key
+and hacktop's own SSH host key. That second one is what lets hacktop verify its
+own backups — `minecraft-backup-verify.service` runs monthly, decrypts the newest
+archive and walks every tar header. It also means a hacktop compromise can read
+historical worlds, which was judged an acceptable price for verifiability.
+
+```sh
+# proof, not vibes: written only on a successful run
+ssh deploy@192.168.1.26 cat /var/lib/node-exporter-textfile/minecraft_backup.prom
+#   minecraft_backup_quiesced 0  means the archive may catch a partial save
+ssh deploy@192.168.1.26 sudo systemctl start minecraft-backup-verify   # verify on demand
+
+# restore, on the desktop (stop the server first):
+age -d -i ~/.config/sops/age/keys.txt atmons-world-<ts>.tar.age | sudo tar -C /srv/minecraft -xv
+```
+
+Alerts: `MinecraftBackupStale`, `MinecraftBackupNotQuiesced`,
+`MinecraftBackupShrank`, `MinecraftBackupUnverified`.
+
+## The ATMons Minecraft server
+
+**The console is not a terminal.** It is a systemd FIFO
+(`/run/minecraft/atmons.stdin`), so `tmux attach` no longer exists:
+
+```sh
+journalctl -fu minecraft-server-atmons     # read the console
+sudo mc-console send 'list'                # write to it
+sudo mc-console up                         # is it writable at all?
+```
+
+**Never** write to that path with a shell redirect. If the socket unit happens to
+be down, `echo x > /run/minecraft/atmons.stdin` creates a *regular file* there,
+and the socket then refuses to start — the server never comes back until someone
+removes it by hand. `mc-console` exists solely to make that impossible, and
+`checks.x86_64-linux.minecraft-console` keeps it that way.
+
+**Roles.** Policy lives in git (`hosts/lan/hacktop/atmons-ranks.nix`, generated
+into `world/serverconfig/ftbranks/ranks.snbt`); membership lives on the server.
+So `/ftbranks add <player> trusted` persists, but editing ranks in-game does not
+— the file is re-copied from the store on every start. `trusted` grants nothing
+in-world; it only unlocks `/color`.
+
+**Ops are declarative**, so in-game `/op` and `/deop` are reverted at the nightly
+restart — put operators in the `operators` attrset in `minecraft.nix` instead.
+
+**Bans are not.** `nix-minecraft` only manages `banned-players.json` when
+`bannedPlayers` is non-empty, and it is unset, so in-game `/ban` writes that file
+directly and persists. Setting `bannedPlayers` would flip that behaviour. Either
+way, ban the *username*: cloud1's masquerade makes every player `10.100.0.1`, so
+`/ban-ip` is useless and the only place an address can be blocked is cloud1's
+nftables.
+
+The server restarts nightly at ~05:00 local with 15/5/1-minute in-game warnings,
+because a 374-mod pack leaks — it was at 11.6 GB RSS after five days against the
+old 8 GB heap cap. The heap is now 12 GB fixed (`Xms == Xmx`, pre-touched), so
+expect ~15–16 GB RSS from startup rather than a climb to it; `minecraft.nix` has
+the RAM arithmetic against the CI runner that shares this box.
+
+### When the server is unreachable, check power first
+
+hacktop is a laptop doing a server's job, so mains power is a dependency of the
+game server the same way the disk is. On 2026-08-04 it lost power at 11:09:48
+and was gone 16 minutes: the journal stops mid-line, no shutdown sequence, no
+kernel message, no OOM. The battery was at 3%, so there was no ride-through at
+all — and the world took an unclean shutdown.
+
+`NodeDown` only says "host unreachable", which is true but after the fact.
+`HostOnBatteryPower` / `HostBatteryLow` / `HostBatteryWorn` (monitoring.nix,
+group `power`) say it beforehand, or at least say why. To check by hand:
+
+```sh
+ssh deploy@192.168.1.26 'cat /sys/class/power_supply/BAT0/{capacity,status}; cat /sys/class/power_supply/AC/online'
+journalctl -b -1 -n 20 --no-pager   # on the box: a clean reboot ends with a shutdown sequence, a power cut just stops
+```
+
+Battery health was 60% of design as of 2026-08-04
+(`node_power_supply_charge_full / ..._charge_full_design`). Capacity reads a
+percentage of what the cell holds *now*, not of design — so a worn battery shows
+a confident 100% and still dies in a fraction of the expected time. That is what
+`HostBatteryWorn` exists to catch, because `HostBatteryLow` structurally cannot.
+
+### Updating the modpack
+
+Everyone must update their CurseForge client in the same window — a client on
+the old pack cannot join. So this is a coordinated change, not a quiet one.
+
+Find the new server-pack file id (the *server* pack, not the client zip):
+
+```sh
+curl -s 'https://www.curseforge.com/api/v1/mods/1356598/files?pageSize=5&sort=dateCreated&sortDescending=true' | jq '.data[] | {id, displayName}'
+curl -s 'https://www.curseforge.com/api/v1/mods/1356598/files/<clientFileId>/additional-files'
+```
+
+The CDN URL splits the id after 4 digits: `8572602` → `files/8572/602/`. Then
+`nix-prefetch-url --type sha256 <url>` (≈1 GB, and it seeds the store so the
+later build does not re-download), and `nix hash convert --to sri` for the hash.
+
+Before editing, check the four things `minecraft.nix` assumes about the zip —
+each is a comment there that goes stale silently:
+
+```sh
+unzip -Z1 <zip> | grep -i crashassistant            # the installPhase `rm` glob must still match
+unzip -Z1 <zip> | grep '^kubejs/server_scripts/'    # nothing named atmons_color.js
+unzip -p  <zip> kubejs/server_scripts/modpack/commands.js | grep -i literal   # nothing registering "color"
+unzip -p  <zip> startserver.sh | grep NEOFORGE_VERSION
+```
+
+Then diff the mod list against the old zip. **Mod removals are the world risk** —
+missing block/entity registries eat chunks; pure version bumps and additions do
+not. 1.1.1 → 1.2.0 removed nothing, which is why it was a safe one.
+
+**The NeoForge bump usually forces a `nix flake update nix-minecraft`, and that
+input controls the JVM.** Upstream now derives the JDK from
+`java_versions.getLatest`, so a routine bump moved the same NeoForge build from
+`openjdk-headless-21` to `openjdk-25`. `minecraft.nix` pins `jre_headless` back
+to `pkgs.jdk21_headless` for that reason — keep the pin, and check what actually
+landed rather than trusting it:
+
+```sh
+nix derivation show -r "/etc/nixos#nixosConfigurations.hacktop.config.system.build.toplevel" \
+  | grep -o 'openjdk-[a-z]*-\?[0-9][0-9.+]*' | sort -u     # expect only 21.x
+```
+
+Deploy takes the server down for a few minutes (12 GB of pre-touched heap plus
+374 mods is a slow boot). Roll back with `colmena apply --on hacktop` from the
+previous commit; the world is untouched by a downgrade only if no new mod wrote
+into it, so take the backup seriously — `minecraft-backup.service` runs at 04:00,
+or start it by hand first.
+
+### Attributing an incident to a source address
+
+The game server logs a **username**; cloud1 masquerades, so the address it sees
+is always `10.100.0.1`. The real client address exists at exactly one place: the
+`mc-conn` line cloud1's nftables writes as the connection crosses the forward
+hook, before the masquerade. Grafana → **ATMons - Security & Attribution** puts
+the two side by side for exactly this.
+
+```sh
+# 1. when did they join?  (Loki, or on the box)
+{unit="minecraft-server-atmons.service"} |= `joined the game`
+
+# 2. what connected around then?
+{host="cloud1"} |= `mc-conn `        # SRC=<real address>
+```
+
+This is correlation by timestamp, not proof. With several people joining inside
+the same few seconds it narrows the field rather than identifying someone — say
+so out loud before acting on it.
+
+To actually block an address, it has to be done on cloud1 (nftables); a
+`/ban-ip` on the game server is meaningless behind the masquerade.
+
+### Moderation
+
+```sh
+sudo mc-console send 'ban <player> <reason>'   # persists; see the note above
+sudo mc-console send 'kick <player> <reason>'
+sudo mc-console send 'pardon <player>'
+sudo mc-console send 'banlist'
+sudo mc-console send 'mute <player> 10m'       # FTB Essentials, chat only
+```
+
+The pack also ships its own KubeJS banlist (`server_banlist_config.json`, read by
+`kubejs/server_scripts/banlist_script.js`) which bans *items*, replaces banned
+block entities with signs, and blocks banned mob spawns — worth knowing before
+reaching for a mod.
+
+### Diagnosing lag
+
+`spark` is already in the pack and works from the console. This is the response
+to a `MinecraftTickLag` alert:
+
+```sh
+sudo mc-console send 'spark tps'
+sudo mc-console send 'spark health'
+sudo mc-console send 'spark profiler start'
+# ... let it run through the bad period ...
+sudo mc-console send 'spark profiler stop'
+```
+
+`observable` is also installed and reports lag by entity/block.
+
+`spark` answers "what is slow *right now*". For a stall that already happened,
+the JVM writes a GC + safepoint log to `/var/log/minecraft-atmons/gc.log`
+(5 × 32 MB, rotated by the JVM, outside `/srv` so the nightly world backup does
+not sweep it up):
+
+The files are `0660 minecraft:minecraft` (the unit's `UMask=0007`), so reading
+them needs `sudo` — and `deploy` has no passwordless sudo, so use `ssh -t` or
+just run these on the box:
+
+```sh
+ssh -t deploy@192.168.1.26
+
+# every stop-the-world pause over 1s, GC-caused or not. Total: is in NANOseconds
+# — the legacy "application threads were stopped" line does not exist under
+# unified logging, don't grep for it.
+sudo awk -F'Total: ' '/Safepoint /{split($2,t," ");
+  if (t[1]+0 > 1e9) printf "%8.2f s  %s\n", t[1]/1e9, $0}' /var/log/minecraft-atmons/gc.log
+
+# heap occupancy either side of each collection — is it filling up over the day?
+sudo grep -E 'Pause (Young|Full)' /var/log/minecraft-atmons/gc.log | tail -40
+```
+
+Rotation is the JVM's own (`gc.log`, then `gc.log.0`…`gc.log.4`), and it starts
+a fresh file on every restart — so a nightly-restart cycle is roughly one file.
+
+This distinguishes the two causes of a "Can't keep up!" line, which `spark`
+after the fact cannot. Read the **safepoint name** on any multi-second pause:
+
+- `G1CollectForAllocation` / `Pause Full` → a **collector pause**. The heap is
+  the problem; the fix is more heap or less garbage, and the `Pause Young` lines
+  will show occupancy climbing toward the cap through the day.
+- anything else, or tick lag with **no** pause of comparable length → the tick
+  did six seconds of honest work. The fix is less per-tick work (`spark
+  profiler`, entity/chunk load), and more heap will do nothing.
+
+They need opposite fixes, so check here before tuning anything.
+
+Baseline as of 2026-08-02, worth knowing before reading this as an emergency:
+the server produced ~16 `Can't keep up!` lines/day at 1–2 players, worst 14.1 s.
+`MinecraftTickLag` only fires above 10 in 15m, so that drip does not alert.
+
+### Surgical grief repair
+
+Restoring the whole world costs everyone a day. A region file covers 512×512
+blocks, so `region = floor(coord / 512)` — extract just the affected one:
+
+```sh
+# griefed around x=6500, z=-5300  ->  r.12.-11.mca
+age -d -i /etc/ssh/ssh_host_ed25519_key atmons-world-<ts>.tar.age \
+  | tar -xf - atmons/world/region/r.12.-11.mca
+```
+
+Stop the server, drop the file into `/srv/minecraft/atmons/world/region/`, start.
+
+### Known blind spot: no command auditing
+
+There is **no record of what commands anyone ran** — verified as zero
+`issued server command` lines across 30h of journal, including for `/ftbranks`
+commands that were definitely executed. Vanilla's `logAdminCommands` only covers
+commands that emit feedback, and most mod commands do not. Closing this properly
+needs a mod. Written down so it is a known gap rather than a false sense of
+coverage.
+
+## Cobblemon player data
+
+hacktop is a laptop with a dead battery: on 2026-08-04 11:09:48 it lost power at 3%
+with no ride-through. The journal stops mid-line — no shutdown sequence, no kernel
+message, no OOM. Cobblemon was mid-write for the one player online (br1gg_s,
+`525337e6-f77e-413a-8e56-c7d81899a5f5`), which is exactly why only that player's
+data broke. At the next login (11:31:40) it logged `.old File cobblemonplayerdata
+for 525337e6-... is corrupt or missing. Data is lost`, and the same for `pokedex`
+and `cobblenav/spawndata`. In game: the Pokedex count in the chat prefix went
+127 -> 0 and Cobblemon believed the player had never picked a starter.
+
+### Diagnose from the journal, never from the files
+
+**By the time you look, the files are healthy and normally sized** — Cobblemon writes
+fresh default data over what it could not read, so there is no corrupt file left to
+find. The only evidence is in the log. The searchable string is `Data is lost`.
+
+`deploy` is in the `systemd-journal` group, so this needs no sudo — but run it over
+plain ssh, not `colmena exec`, which wraps the command in sudo and fails.
+
+```sh
+ssh deploy@192.168.1.26
+journalctl -u minecraft-server-atmons --since 2026-08-04 | grep 'Data is lost'
+journalctl -u minecraft-server-atmons --since 2026-08-04 | grep 'UUID of player'
+```
+
+The same line is logged for a first-time joiner (the file is legitimately absent —
+confirmed for XSparebircHX, whose `UUID of player <name> is <uuid>` line landed four
+seconds earlier) and for mod fake-players (version-3, name-based UUIDs that never
+authenticate). So correlate every `Data is lost` UUID against the `UUID of player`
+lines: a real loss belongs to a player who authenticated *before* today.
+
+### Layout
+
+`<world>/<store>/<first 2 chars of uuid>/<uuid>.<ext>`, the shard coming from
+`substring(0, 2)` in Cobblemon's `FileBasedPlayerDataStoreBackend`. Extensions
+differ per store, and getting one wrong silently restores nothing:
+
+| Store | Extension | Holds |
+|---|---|---|
+| `cobblemonplayerdata` | `.json` | starter flags + `starterUUID`, `keyItems`, `battleTheme`, `extraData`, `advancementData` (all the lifetime counters) |
+| `pokedex` | `.nbt` | per species -> per form: genders, `seenShinyStates`, aspects, knowledge (`NONE`/`ENCOUNTERED`/`CAUGHT`) — records things merely *seen*, not just caught |
+| `cobblenav/spawndata` | `.nbt` | cobblenav spawn state |
+
+None of `advancementData` is recoverable by playing — `totalCaptureCount`,
+`totalEggsCollected`/`Hatched`, `totalEvolvedCount`, `totalBattleVictoryCount` plus
+the PvP/PvW/PvN splits, `totalShinyCaptureCount`, `totalTradedCount`,
+`totalTypeCaptureCounts`, `totalDefeatedCounts`, `aspectsCollected` all only count
+forward.
+
+Each file has a `.old` sibling (Cobblemon's own fallback) and may have a `.tmp`.
+**Write both the live file and its `.old`**, with the server stopped: restore only
+the live file and a later parse failure drops you straight back to the reset state,
+and Cobblemon holds player data in memory and rewrites it on save/logout, so a
+restore under a running server is overwritten.
+
+### Restore
+
+This needs real root on the box. `deploy` cannot do it — the world is 0700
+minecraft, the NAS backup dir is 0700 root, the host key is root-only, and
+`colmena exec` wraps commands in a sudo scoped to activation binaries only
+(`modules/deploy-user.nix`). Use `sudo bash`, not the login shell: under zsh an
+unmatched glob aborts the command instead of passing through.
+
+Backups are `minecraft-backup.nix`'s dailies, 14 kept, members prefixed `atmons/`.
+Decrypt on hacktop with its own host key; `age` isn't on PATH, take it from the
+closure. One decrypt pass over ~8 GB takes several minutes, so extract everything
+you want in that single pass.
+
+```sh
+sudo bash
+uuid=525337e6-f77e-413a-8e56-c7d81899a5f5; shard=${uuid:0:2}
+w=/srv/minecraft/atmons/world          # the stores live under world/, not the server root
+age=$(ls -d /nix/store/*-age-*/bin/age | head -1)
+mkdir -p /root/cobblemon-restore && cd /root/cobblemon-restore
+
+systemctl stop minecraft-server-atmons
+
+# snapshot first - this is the undo
+tar -cf pre-restore.tar -C "$w" \
+  cobblemonplayerdata/$shard pokedex/$shard cobblenav/spawndata/$shard
+
+# archive members are prefixed atmons/world/ - tar reports a missing member as
+# "Not found in archive", which reads like a bad backup rather than a bad path
+$age -d -i /etc/ssh/ssh_host_ed25519_key \
+    /mnt/nas/_backups/minecraft/atmons-world-<ts>.tar.age \
+  | tar -xvf - atmons/world/cobblemonplayerdata/$shard/$uuid.json \
+               atmons/world/pokedex/$shard/$uuid.nbt \
+               atmons/world/cobblenav/spawndata/$shard/$uuid.nbt
+
+# straight-restore the two NBT stores, live file + .old
+for f in pokedex/$shard/$uuid.nbt cobblenav/spawndata/$shard/$uuid.nbt; do
+  install -o minecraft -g minecraft -m 0660 atmons/world/$f "$w/$f"
+  install -o minecraft -g minecraft -m 0660 atmons/world/$f "$w/$f.old"
+done
+```
+
+The NBT stores get a straight restore on purpose: nested form records, enum
+knowledge values and a MoLang `VariableStruct` mean a hand-merge risks a file
+Cobblemon rejects — putting you back at zero — for little payoff (the post-reset
+dex was 2 KB against the backup's 58 KB).
+
+### Merge cobblemonplayerdata.json, don't just restore it
+
+It's plain JSON with well-defined merge semantics, and the post-reset counters
+restart at zero, so they are pure increments: adding them to the backup totals
+reconstructs the true value *and* keeps the play since the reset. A straight
+restore throws the latter away.
+
+| Field | Rule |
+|---|---|
+| `starterPrompted`, `starterLocked`, `starterSelected` | OR — the backup's `true` wins |
+| `starterUUID` | from the backup |
+| `keyItems` | set union |
+| scalar `total*Count` | sum |
+| `totalTypeCaptureCounts`, `totalDefeatedCounts` | per-key sum |
+| `aspectsCollected` | per-species set union |
+
+```
+backup   totalBattleVictoryCount 732   totalCaptureCount 124   starterSelected true
+current  totalBattleVictoryCount   7   totalCaptureCount   6   starterSelected false
+merged   totalBattleVictoryCount 739   totalCaptureCount 130   starterSelected true
+```
+
+Install the merged file to both `$w/cobblemonplayerdata/$shard/$uuid.json` and its
+`.old`, same `install -o minecraft -g minecraft -m 0660`.
+
+No merge recovers everything: play between the backup timestamp and the crash is in
+neither file.
+
+### Verify
+
+```sh
+systemctl start minecraft-server-atmons
+journalctl -u minecraft-server-atmons -b | grep 'Data is lost'   # want nothing
+journalctl -u minecraft-server-atmons -b | grep 'joined the game' | tail
+nix run nixpkgs#mcstatus -- 192.168.1.26:25565 status            # also lists players
+```
+
+A join renders as `<[N] name> joined the game` — a useful at-a-glance check, but
+read the parts correctly before grepping for them. `N` is Cobblemon's *caught*
+count (not seen), prepended by `allthemons-<ver>.jar`. The angle brackets are
+literal characters inside the `ftbranks.name_format` string that `atmons-ranks.nix`
+gives every `color_*` rank — so a player who has never run `/color` has no such
+rank and renders as `[N] name` with no brackets at all. Both parts ride on the
+*display name*, so they appear in death and leave messages too. Don't write a grep
+that requires the brackets.
+
+Use `mcstatus` rather than a `/dev/tcp` probe to ask whether the server is up; the
+latter is unreliable from a sandboxed shell.
 
 ## Rollback
 

@@ -7,20 +7,72 @@
 # world dir straight into `age` (no plaintext hits disk), encrypted to the
 # ADMIN age key, written to the NAS over NFS, newest 14 kept.
 #
-# The tar is crash-consistent: the world is live and autosaves every ~5 min,
-# so a backup may catch a mid-save tick. Fine for a homelab restore point; a
-# console `save-off`/`save-all`/`save-on` wrapper around the tar would make it
-# clean - future nicety.
+# Three things this does beyond a plain tar:
+#
+#   1. QUIESCE. The tar is wrapped in save-off / save-all flush / save-on, so
+#      it no longer catches a mid-autosave tick. Confirming the flush finished
+#      means watching for the server's own "Saved the game" line, which is a
+#      localised string a pack update could move - so failing to confirm never
+#      aborts the backup. It falls back to a crash-consistent tar and records
+#      minecraft_backup_quiesced 0, which alerts. A crash-consistent backup
+#      beats no backup.
+#
+#   2. PROOF. A timestamp, the archive size and the quiesced flag go to
+#      node_exporter's textfile collector, so "the timer is green" and "there
+#      is a backup" stop being the same claim. mgmt alerts on all three.
+#
+#   3. SELF-VERIFICATION. The archive is encrypted to a SECOND recipient,
+#      hacktop's own SSH host key, so the monthly verify job below can decrypt
+#      and walk it. Without that, nothing on this box could ever prove the
+#      ciphertext on the NAS was intact. The trade: a hacktop compromise can
+#      then read historical (pre-grief) worlds, not just the live one it
+#      already holds in plaintext. Judged worth it - an unverified backup is
+#      not a backup.
 #
 # Restore (on the desktop, which holds the admin key; stop the server first):
-#   age -d -i ~/.config/sops/age/keys.txt atmons-world-<ts>.tar.age | tar -C / -xv
-{ pkgs, ... }:
+#   age -d -i ~/.config/sops/age/keys.txt atmons-world-<ts>.tar.age | tar -C /srv/minecraft -xv
+# Or on hacktop itself, with its host key:
+#   age -d -i /etc/ssh/ssh_host_ed25519_key atmons-world-<ts>.tar.age | tar -tvf -
+{
+  config,
+  pkgs,
+  lib,
+  ...
+}:
 
 let
   # Admin age recipient - PUBLIC, identical to the key in ../../../.sops.yaml.
   adminRecipient = "age16xrzea59hwrrwlccyu924e9ggraz7flgkh3grqpepdf2rhurry8s3hm5df";
   nasDir = "/mnt/nas/_backups/minecraft";
   keep = 14;
+  unit = "minecraft-server-atmons";
+
+  # age accepts an ssh-ed25519 public key as a recipients file (-R) and the
+  # matching private key as an identity (-i). Verified with age 1.3.1.
+  hostKeyPub = "/etc/ssh/ssh_host_ed25519_key.pub";
+  hostKey = "/etc/ssh/ssh_host_ed25519_key";
+
+  # Written by node_exporter's textfile collector (modules/metrics.nix) - the
+  # only proof a run actually happened rather than merely being scheduled.
+  textfileDir = config.alcove.configRevision.textfileDir;
+
+  mcConsole = lib.getExe config.alcove.mcConsole.package;
+
+  # Serialises the backup against the nightly restart. systemd's After=/Before=
+  # only order units WITHIN a transaction, so they are inert between two
+  # independently-firing timers; Conflicts= would be worse, since it would stop
+  # the backup mid-run. A lock is the only thing that actually works here.
+  lockFile = "/run/minecraft-maintenance.lock";
+
+  # Belt and braces for save-on. The in-script trap covers normal exit, set -e,
+  # SIGTERM and SIGINT; this covers SIGKILL - OOM, systemctl kill, or a hung
+  # NFS write hitting TimeoutStopSec. A server left with saving disabled is the
+  # worst outcome in this file, so it gets two independent nets.
+  saveOnScript = pkgs.writeShellScript "minecraft-backup-save-on" ''
+    if ${mcConsole} up; then
+      ${mcConsole} send 'save-on' || true
+    fi
+  '';
 in
 {
   # Same NAS share media/mgmt use; lazy + non-blocking so a NAS outage can't
@@ -47,18 +99,126 @@ in
       pkgs.gnutar
       pkgs.coreutils
       pkgs.findutils
+      pkgs.util-linux # flock
+      pkgs.systemd # journalctl, systemctl
     ];
-    serviceConfig.Type = "oneshot"; # root - the world dir is minecraft-owned, umask 0007
+    serviceConfig = {
+      Type = "oneshot"; # root - the world dir is minecraft-owned, umask 0007
+      ExecStopPost = "-${saveOnScript}";
+    };
     script = ''
       set -euo pipefail
+
+      # Held for the whole run. The nightly restart blocks on this rather than
+      # tearing the tar out from under itself.
+      exec 9>${lockFile}
+      flock 9
+
+      quiesced=0
+      save_off_sent=0
+
+      restore_saving() {
+        if [ "$save_off_sent" = 1 ]; then
+          ${mcConsole} send 'save-on' || \
+            echo "WARNING: could not re-enable saving; ExecStopPost is the backstop" >&2
+        fi
+      }
+      trap restore_saving EXIT INT TERM
+
+      started_before=""
+      if ${mcConsole} up; then
+        started_before=$(systemctl show ${unit} -p ExecMainStartTimestampMonotonic --value)
+
+        # Everything the server prints after this point is fair game for the
+        # flush check. Using a timestamp rather than a journal cursor keeps
+        # this readable; the window is seconds wide so collisions are not a
+        # practical concern.
+        flush_since=$(date '+%Y-%m-%d %H:%M:%S')
+
+        ${mcConsole} send 'save-off'
+        save_off_sent=1
+        ${mcConsole} send 'save-all flush'
+
+        # Wait for the server to say it finished. Bounded: a 371-mod world can
+        # take a while, but not forever, and we would rather take a
+        # crash-consistent backup than skip a night.
+        for _ in $(seq 1 120); do
+          if journalctl -u ${unit} --since "$flush_since" --no-pager -o cat 2>/dev/null \
+             | grep -qa 'Saved the game'; then
+            quiesced=1
+            break
+          fi
+          sleep 1
+        done
+
+        if [ "$quiesced" = 1 ]; then
+          echo "world quiesced (save-all flush confirmed)"
+        else
+          echo "WARNING: no 'Saved the game' within 120s - taking a crash-consistent tar" >&2
+        fi
+      else
+        # A stopped server is the most consistent state there is: nothing is
+        # writing. Deliberately reported as quiesced so the metric answers "is
+        # this archive consistent", not "did we talk to the console".
+        quiesced=1
+        echo "server not running - plain tar, nothing to quiesce"
+      fi
+
       ts=$(date +%Y%m%d-%H%M%S)
       install -d -m 0700 "${nasDir}"
-      # tar -> age streamed: the plaintext tarball never touches disk.
+
+      # Write to a dotted .partial first: a killed run must not leave a
+      # truncated archive that looks valid, and the retention glob below must
+      # never be able to select one.
+      partial="${nasDir}/.atmons-world-$ts.tar.age.partial"
+      final="${nasDir}/atmons-world-$ts.tar.age"
+
+      # tar -> age streamed: the plaintext tarball never touches disk. Two
+      # recipients: the admin key for real restores, hacktop's own host key so
+      # minecraft-backup-verify can check its work.
       tar -cf - -C /srv/minecraft atmons \
-        | age -r "${adminRecipient}" -o "${nasDir}/atmons-world-$ts.tar.age"
-      # retention: keep the newest ${toString keep}
-      ls -1t "${nasDir}"/atmons-world-*.tar.age 2>/dev/null | tail -n +${toString (keep + 1)} | xargs -r rm -f
-      echo "backup written: ${nasDir}/atmons-world-$ts.tar.age ($(stat -c%s "${nasDir}/atmons-world-$ts.tar.age") bytes)"
+        | age -r "${adminRecipient}" -R ${hostKeyPub} -o "$partial"
+
+      restore_saving
+      save_off_sent=0
+
+      # If the server restarted while we were reading the world, the archive
+      # may straddle a full save. Still keep it - a possibly-torn backup beats
+      # none - but do not claim it was quiesced.
+      if [ -n "$started_before" ]; then
+        started_after=$(systemctl show ${unit} -p ExecMainStartTimestampMonotonic --value)
+        if [ "$started_before" != "$started_after" ]; then
+          echo "WARNING: server restarted mid-backup; archive may straddle a save" >&2
+          quiesced=0
+        fi
+      fi
+
+      mv "$partial" "$final"
+      size=$(stat -c%s "$final")
+      echo "backup written: $final ($size bytes, quiesced=$quiesced)"
+
+      # retention: keep the newest ${toString keep}. The glob cannot match a
+      # .partial, which is the point of the leading dot.
+      ls -1t "${nasDir}"/atmons-world-*.tar.age 2>/dev/null \
+        | tail -n +${toString (keep + 1)} | xargs -r rm -f
+
+      # Same mktemp -> chmod -> atomic mv dance as mgmt's backup.nix, so a
+      # scrape can never catch a half-written metrics file.
+      install -d -m 0755 "${textfileDir}"
+      metric=$(mktemp "${textfileDir}/.minecraft_backup.XXXXXX")
+      {
+        echo "# HELP minecraft_backup_last_success_timestamp_seconds When the ATMons world backup last succeeded."
+        echo "# TYPE minecraft_backup_last_success_timestamp_seconds gauge"
+        echo "minecraft_backup_last_success_timestamp_seconds $(date +%s)"
+        echo "# HELP minecraft_backup_quiesced Whether saving was flushed and paused for the last backup."
+        echo "# TYPE minecraft_backup_quiesced gauge"
+        echo "minecraft_backup_quiesced $quiesced"
+        echo "# HELP minecraft_backup_size_bytes Size of the last ATMons world archive."
+        echo "# TYPE minecraft_backup_size_bytes gauge"
+        echo "minecraft_backup_size_bytes $size"
+      } > "$metric"
+      chmod 0644 "$metric"
+      mv "$metric" "${textfileDir}/minecraft_backup.prom"
     '';
   };
 
@@ -66,9 +226,80 @@ in
     description = "Daily ATMons world backup";
     wantedBy = [ "timers.target" ];
     timerConfig = {
-      OnCalendar = "*-*-* 04:00:00"; # staggered off mgmt's 03:30 NAS write
+      # LOCAL time (America/Los_Angeles, modules/common.nix) - systemd calendar
+      # specs use the system timezone unless one is named. Staggered off mgmt's
+      # 03:30 NAS write, and 45 minutes ahead of the nightly restart, with the
+      # lock as the real interlock.
+      OnCalendar = "*-*-* 04:00:00";
       Persistent = true; # catch up a missed run on next boot
       RandomizedDelaySec = "10m";
+    };
+  };
+
+  # A green timer is not a backup. Monthly, decrypt the newest archive with
+  # hacktop's own host key and walk every tar header - the only check that
+  # exercises the whole chain (NFS read, age decrypt, tar integrity) rather
+  # than just asserting a file exists.
+  systemd.services.minecraft-backup-verify = {
+    description = "Verify the newest ATMons world backup is decryptable and intact";
+    after = [ "network-online.target" ];
+    wants = [ "network-online.target" ];
+    unitConfig.RequiresMountsFor = [ "/mnt/nas" ];
+    path = [
+      pkgs.age
+      pkgs.gnutar
+      pkgs.coreutils
+      pkgs.gnugrep
+    ];
+    serviceConfig.Type = "oneshot";
+    script = ''
+      set -euo pipefail
+
+      newest=$(ls -1t "${nasDir}"/atmons-world-*.tar.age 2>/dev/null | head -1 || true)
+      if [ -z "$newest" ]; then
+        echo "no archive to verify" >&2
+        exit 1
+      fi
+      echo "verifying $newest"
+
+      # Guards against someone "simplifying" the age invocation down to one
+      # recipient, which would silently make this job impossible next month.
+      if ! grep -qa 'ssh-ed25519' "$newest"; then
+        echo "archive has no ssh-ed25519 recipient stanza - hacktop cannot self-verify" >&2
+        exit 1
+      fi
+
+      # Decrypt and walk every tar header. Holding the listing in a variable
+      # keeps this to one decrypt pass; it is a few MB of filenames even for a
+      # large world, against the ~GB of ciphertext it avoids re-reading.
+      listing=$(age -d -i ${hostKey} "$newest" | tar -tf -)
+      count=$(printf '%s\n' "$listing" | wc -l)
+
+      if ! printf '%s\n' "$listing" | grep -qa 'atmons/world/level.dat'; then
+        echo "decrypted fine but atmons/world/level.dat is missing - wrong directory archived?" >&2
+        exit 1
+      fi
+      echo "verified: $count members, level.dat present"
+
+      install -d -m 0755 "${textfileDir}"
+      metric=$(mktemp "${textfileDir}/.minecraft_backup_verify.XXXXXX")
+      {
+        echo "# HELP minecraft_backup_verify_last_success_timestamp_seconds When a backup was last decrypted and walked successfully."
+        echo "# TYPE minecraft_backup_verify_last_success_timestamp_seconds gauge"
+        echo "minecraft_backup_verify_last_success_timestamp_seconds $(date +%s)"
+      } > "$metric"
+      chmod 0644 "$metric"
+      mv "$metric" "${textfileDir}/minecraft_backup_verify.prom"
+    '';
+  };
+
+  systemd.timers.minecraft-backup-verify = {
+    description = "Monthly ATMons backup restore-verification";
+    wantedBy = [ "timers.target" ];
+    timerConfig = {
+      OnCalendar = "*-*-01 06:00:00";
+      Persistent = true;
+      RandomizedDelaySec = "30m";
     };
   };
 }

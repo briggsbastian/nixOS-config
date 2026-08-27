@@ -16,7 +16,9 @@
     ./hardware-configuration.nix
     ./forgejo-runner.nix
     ./minecraft.nix
+    ./mc-console.nix
     ./minecraft-backup.nix
+    ./minecraft-restart.nix
     ./wg-proxy.nix
   ];
 

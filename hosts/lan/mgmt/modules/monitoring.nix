@@ -368,9 +368,212 @@ in
                 annotations:
                   summary: "mgmt's encrypted off-box backup is stale or has never run"
                   description: "No successful mgmt-backup.service run recorded in the last 26h - step-ca, service secrets, and the NetBox DB dump are the only copies of that state."
+
+              # hacktop's minecraft-backup.service writes this on every
+              # successful run (hosts/lan/hacktop/minecraft-backup.nix); daily
+              # at 04:00 local plus up to 10m jitter, so 26h gives >1h grace.
+              # Same `or absent(...)` clause as BackupStale above and for the
+              # same reason: a metric that has never existed must be loud.
+              #
+              # critical, not warning: the ATMons world is the only state on
+              # hacktop a rebuild cannot regenerate, and the server is
+              # deliberately open to the internet - this backup IS the griefing
+              # recovery story that minecraft.nix's white-list=false leans on.
+              - alert: MinecraftBackupStale
+                expr: |
+                  (time() - minecraft_backup_last_success_timestamp_seconds > 26 * 3600)
+                  or absent(minecraft_backup_last_success_timestamp_seconds)
+                for: 0m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "The ATMons world backup is stale or has never run"
+                  description: "No successful minecraft-backup.service run on hacktop in the last 26h. The world is players' work and the only unregenerable state on that box."
+
+              # The backup quiesces the world (save-off, save-all flush, wait
+              # for the server's own "Saved the game") before tarring. When the
+              # console does not answer - server down, or that string moved
+              # under a pack update - it takes a crash-consistent tar anyway
+              # and reports it here rather than failing. That is the right
+              # trade, but it must not be silent: several nights at 0 means the
+              # quiesce logic has quietly died and every archive since is a
+              # mid-save snapshot.
+              - alert: MinecraftBackupNotQuiesced
+                expr: minecraft_backup_quiesced == 0
+                for: 0m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "ATMons backup ran without quiescing the world"
+                  description: "minecraft-backup.service could not confirm `save-all flush` completed, or the server restarted mid-tar. The archive is usable but may catch a partial save - check the unit's journal for which."
+
+              # A world does not lose half its size overnight. This catches the
+              # failure the .partial rename cannot: a tar that SUCCEEDS while
+              # archiving almost nothing - a renamed world dir, a dataDir a
+              # failed deploy emptied, a bind mount that went away.
+              # max_over_time rather than `offset 7d` so one bad night cannot
+              # become the new baseline and quietly un-fire the alert.
+              - alert: MinecraftBackupShrank
+                expr: |
+                  minecraft_backup_size_bytes
+                    < 0.5 * max_over_time(minecraft_backup_size_bytes[14d])
+                for: 1h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "The ATMons backup is under half its recent size"
+                  description: "Last archive was {{ $value | humanize1024 }}B against its 14d peak - the tar may be picking up an empty or wrong directory."
+
+              # Monthly, hacktop decrypts the newest archive with its own SSH
+              # host key and walks every tar header. Nothing else proves the
+              # ciphertext on the NAS is intact end to end, and it is only
+              # possible because the archive carries a second recipient. 40d =
+              # the monthly cadence plus one missed run.
+              - alert: MinecraftBackupUnverified
+                expr: |
+                  (time() - minecraft_backup_verify_last_success_timestamp_seconds > 40 * 24 * 3600)
+                  or absent(minecraft_backup_verify_last_success_timestamp_seconds)
+                for: 0m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "The ATMons backup has not been restore-verified in over 40 days"
+                  description: "minecraft-backup-verify.service last succeeded more than 40d ago, or never. A green timer is not a backup."
+
+          - name: minecraft-proxy
+            rules:
+              # cloud1's per-source-IP throttle (hosts/cloud/cloud1/proxy.nix)
+              # only drops when a single address opens more than 10 new
+              # connections a minute. A human reconnecting does not do that; a
+              # join-flood bot or a scanner does. Sustained for 10m means
+              # something is hammering the public path.
+              #
+              # Counter, not a log line, on purpose: a drop storm is exactly
+              # when per-packet logging would turn an attack on the game into
+              # an attack on the journal. The source addresses are still
+              # recorded - proxy.nix logs the ATTEMPTS, rate-limited.
+              - alert: MinecraftConnectionFlood
+                expr: rate(minecraft_proxy_ratelimit_dropped_packets_total[5m]) > 0
+                for: 10m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "Sustained connection flooding against the public Minecraft path"
+                  description: "cloud1's rate limiter has been dropping new connections for 10m. Query {host=\"cloud1\"} |= \"mc-conn \" in Loki for the source addresses."
+
+          # hacktop is a laptop doing a server's job, so mains power is a
+          # dependency of the game server the same way the disk is. On
+          # 2026-08-04 it lost power at 11:09:48 and was gone for 16 minutes:
+          # the journal stops mid-line with no shutdown sequence, no kernel
+          # message, no OOM. The battery was at 3%, so there was no ride-through
+          # at all - the box died the instant the mains blinked, and the world
+          # took an unclean shutdown (no chunk damage that time; not a promise).
+          #
+          # Nothing alerted. NodeDown fired only after the fact, saying "host
+          # unreachable" - true but useless, because by then it had already
+          # happened. These three say it *before*, or at least say *why*.
+          #
+          # No instance selector on purpose: node_exporter only emits
+          # power_supply metrics where /sys/class/power_supply is populated, so
+          # today these series exist for hacktop alone and the rules scope
+          # themselves. Another laptop joining the fleet is covered for free.
+          - name: power
+            rules:
+              # Running on battery: a countdown, not a state. Alert fast.
+              #
+              # `max by (instance)` rather than a match on power_supply="AC" is
+              # load-bearing. hacktop has two inputs - the barrel "AC" and a
+              # USB-C PD source - and only one is online at a time. Pinning the
+              # rule to AC would fire every time the machine was legitimately
+              # powered over USB-C. Only when EVERY input reads 0 is it actually
+              # on battery.
+              - alert: HostOnBatteryPower
+                expr: max by (instance) (node_power_supply_online) == 0
+                for: 1m
+                labels:
+                  severity: critical
+                annotations:
+                  summary: "{{ $labels.instance }} is running on battery"
+                  description: "No mains or USB-C input is online. This box holds ~60% of its design battery capacity, so assume minutes, not hours. Shut the game server down cleanly before the battery does it for you: sudo mc-console send 'save-all flush' then 'stop'."
+
+              # The state that actually caused the outage: a battery sitting
+              # low while ON mains, so there is no reserve when power blinks.
+              # Invisible without this rule - everything looks healthy right up
+              # until the moment it isn't.
+              #
+              # `for: 2h` because a genuine recharge from near-empty on this
+              # machine takes 1-2h, and alerting during that recovery would
+              # mean paging about the outage that just ended. Still firing
+              # after 2h means it is not charging, which is the real fault.
+              - alert: HostBatteryLow
+                expr: node_power_supply_capacity{power_supply=~"BAT.*"} < 30
+                for: 2h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "{{ $labels.instance }} battery at {{ $value }}% and not recovering"
+                  description: "Below 30% for 2h, so it is not merely recharging after an outage. Until this comes up there is no ride-through: the next mains blip is a hard power cut and an unclean world shutdown. Check the charger and that the barrel/USB-C input is actually seated."
+
+              # Wear, which the capacity alert structurally cannot see: capacity
+              # is a percentage of what the battery holds NOW, not of design.
+              # A worn cell reads a confident 100% and still dies in a fraction
+              # of the original time. Measured 60.2% on 2026-08-04; the
+              # threshold sits below that so this reports real further decay
+              # rather than firing on day one and being muted.
+              - alert: HostBatteryWorn
+                expr: |
+                  node_power_supply_charge_full{power_supply=~"BAT.*"}
+                    / node_power_supply_charge_full_design < 0.5
+                for: 6h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "{{ $labels.instance }} battery has degraded to {{ $value | humanizePercentage }} of design"
+                  description: "The reserve behind HostOnBatteryPower is now less than half of what the hardware shipped with. A full charge no longer buys the time you would assume. Replace the cell, or accept that mains loss means immediate loss of the game server."
       ''
     ];
   };
+
+  # LogQL alerts for the Minecraft path, as a SECOND file in the same tenant
+  # directory rather than an edit to modules/siem-lite.nix. Three reasons:
+  # siem-lite sets alerts.yaml with `.text`, so it cannot be appended to from
+  # here; the ruler reads every file in the directory, so a second one just
+  # works; and a game-server rule does not belong in a fleet-wide security
+  # module that every host imports.
+  environment.etc."loki/rules/fake/minecraft.yaml".text = ''
+    groups:
+      - name: minecraft
+        rules:
+          # Sustained tick starvation. This is both an ordinary health signal
+          # and the visible symptom of resource exhaustion, which is the shape
+          # an attack on a modded server actually takes - nobody bothers with
+          # packet floods when a hopper array will do.
+          #
+          # Threshold from measurement, not taste: the live server produced ~8
+          # of these in 4h of uptime, clustered around startup and player
+          # joins, worst case 8.7s behind. >10 inside 15m is a stall storm.
+          - alert: MinecraftTickLag
+            expr: |
+              sum(count_over_time({unit="minecraft-server-atmons.service"} |= `Can't keep up` [15m])) > 10
+            for: 0m
+            labels: { severity: warning }
+            annotations:
+              summary: "ATMons server is repeatedly failing to keep up"
+              description: "{{ $value }} tick-lag warnings in 15m. Run `spark tps` and `spark profiler start` on the console to find the cause."
+
+          # Matches the vanilla crash line specifically. Deliberately NOT a
+          # generic ERROR match: this pack logs a wall of mekmm loot-table
+          # errors at every single boot, so an ERROR-based rule would fire on
+          # every restart and be muted within a week.
+          - alert: MinecraftServerCrash
+            expr: |
+              sum(count_over_time({unit="minecraft-server-atmons.service"} |= `Encountered an unexpected exception` [10m])) > 0
+            for: 0m
+            labels: { severity: critical }
+            annotations:
+              summary: "ATMons server hit an unhandled exception"
+              description: "The server logged a crash. journalctl -u minecraft-server-atmons on hacktop has the trace - it survives the process now that the console goes to the journal."
+  '';
 
   # Grafana's DB encryption key. Grafana 13 (nixos-26.05) dropped the module's
   # implicit default, and this was briefly pinned to upstream's old fallback
