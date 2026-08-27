@@ -34,72 +34,10 @@ _: {
 
       ls = "lsd";
 
-      # playground (security lab host): quick shell + HTB VPN control from the
-      # desktop. `htb up|down|status|ip` runs the on-host wrapper over SSH, so the
-      # same word works here as it does on the box (see the playground decepticon
-      # module). `-t` gives a tty for clean status output. `decep` (the whole-lab
-      # driver) is a function below, not an alias, since `decep web` runs locally.
-      pg = "ssh playground@192.168.1.217";
-      htb = "ssh -t playground@192.168.1.217 htb";
-
       # Kali lab VM: tmux-persistent, so reconnecting resumes the same
       # session instead of starting fresh.
       kali = "ssh -t kali 'tmux new-session -A -s kali'";
     };
-
-    # `decep` drives the Decepticon lab from the desktop. Everything except `web`
-    # forwards to the on-host wrapper over SSH (with a tty, so `decep cli` attaches
-    # the launcher). `decep web` runs LOCALLY - and it has to: Decepticon's web UI
-    # is a localhost app (page on :3000, and its terminal panel hard-connects to
-    # ws://localhost:3003), so a LAN URL would load the page but break the terminal.
-    # The tunnel maps BOTH ports to the VM's localhost; the browser then hits
-    # localhost:3000. `decep web stop` closes it. The stack itself stays on
-    # playground - this only bridges your browser to it.
-    initContent = ''
-      decep() {
-        local host=playground@192.168.1.217
-        if [ "$1" = "web" ]; then
-          if [ "$2" = "stop" ]; then
-            pkill -f "ssh -fNT .*$host" && echo "decep web: tunnel closed" || echo "decep web: no tunnel running"
-            return
-          fi
-          # Preflight: is the UI actually up on the VM? (It only listens after you
-          # bring the stack up in 'decep cli' and spawn it with '/web'.)
-          if ! ssh "$host" 'ss -tln 2>/dev/null | grep -q 127.0.0.1:3000'; then
-            echo "decep web: nothing on :3000 on playground yet."
-            echo "  Run 'decep cli', bring the stack up, then spawn the UI with '/web' - and retry."
-            return 1
-          fi
-          # Idempotent: kill any tunnel left over from a prior run FIRST. Without
-          # this, a stale/broken tunnel from an earlier attempt keeps squatting on
-          # 3000/3003, the fresh ssh -L below silently fails to rebind it, and
-          # xdg-open opens whatever the OLD tunnel happens to still be connected to
-          # - looking like it opened "the wrong machine" when it's really just a
-          # leftover process from before.
-          pkill -f "ssh -fNT .*$host" 2>/dev/null || true
-          ssh -fNT -L 3000:127.0.0.1:3000 -L 3003:127.0.0.1:3003 "$host" \
-            && xdg-open http://localhost:3000/web \
-            && echo "decep web: tunnels up (3000 + 3003). Browser -> localhost:3000/web. 'decep web stop' to close."
-        else
-          ssh -t "$host" decep "$@"
-        fi
-      }
-
-      # `lab` opens/attaches a two-window tmux session: a Kali terminal and the
-      # Decepticon CLI. It deliberately does NOT auto-start decep or htb - those
-      # stay manual, explicit actions you run inside the window once attached.
-      lab() {
-        local session="lab"
-        if tmux has-session -t "$session" 2>/dev/null; then
-          tmux attach -t "$session"
-          return
-        fi
-        tmux new-session -d -s "$session" -n kali "ssh -t kali 'tmux new-session -A -s kali'"
-        tmux new-window  -t "$session"    -n decep "ssh -t playground@192.168.1.217 decep cli"
-        tmux select-window -t "$session:kali"
-        tmux attach -t "$session"
-      }
-    '';
 
     history = {
       size = 10000;

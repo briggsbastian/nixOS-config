@@ -33,6 +33,26 @@
       }
     '';
   };
+  # Blank the unused HDMI output at the DRM level. HDMI-A-1 on the dGPU (card1)
+  # has a TV on it that has been powered off for weeks, but its hotplug-detect
+  # line oscillates anyway: ~70 udev `change` events a day on connector 117
+  # since 2026-06-30, with the sink dark the entire time. That is a fault in the
+  # physical path (cable/port/passthrough), not something the sink is doing.
+  #
+  # Each event makes KWin re-enumerate outputs, which destroys and recreates the
+  # kde_output_device_v2 Wayland globals. plasmashell then races to bind a global
+  # that is already gone and takes a fatal protocol error. Twice that killed the
+  # shell outright (Aug 13, Aug 14, exit 255/EXCEPTION); the rest of the time it
+  # survived but wedged - no wallpaper, dead kickoff and task bar, and the panel
+  # jumping between monitors as screen indices get reassigned underneath it.
+  # KWin itself survives either way, which is why the rest of the screen looks
+  # untouched while the panel moves.
+  #
+  # `:d` disables the connector, so the flap never reaches userspace at all. The
+  # name is unambiguous across both amdgpu cards here - the iGPU's port enumerates
+  # as HDMI-A-2. Drop this parameter to get the TV back, but note the underlying
+  # HPD fault is unrepaired and the flapping will return with it.
+  boot.kernelParams = [ "video=HDMI-A-1:d" ];
   networking.hostName = "nixos"; # Define your hostname.
   # networking.wireless.enable = true;  # Enables wireless support via wpa_supplicant.
   # Configure network proxy if necessary
@@ -73,10 +93,6 @@
   # Enable the KDE Plasma Desktop Environment.
   services.displayManager.sddm.enable = true;
   services.desktopManager.plasma6.enable = true;
-  # Also offer the Hyprland "rice" session at the SDDM login screen. This pulls
-  # in the Wayland session entry and xdg-desktop-portal-hyprland; the per-user
-  # rice config lives in home-hypr.nix (the `nixos-hypr` flake target).
-  programs.hyprland.enable = true;
   # Configure keymap in X11
   services.xserver.xkb = {
     layout = "us";
@@ -87,6 +103,30 @@
     enable = true;
     enable32Bit = true;
   };
+  # Memory headroom for big JVM games. The AllTheMons Minecraft client asks for
+  # an 8 GiB heap and carries ~7 GiB of native memory on top (malloc arenas,
+  # LWJGL/GL buffers, and direct buffers, whose default cap equals -Xmx), so it
+  # sits near 15 GiB of a 30 GiB machine. hardware-configuration.nix leaves
+  # swapDevices empty, which meant the kernel's only reclaim option was evicting
+  # page cache: it fell to ~220 MiB before the OOM killer fired, and every
+  # process re-reading its own executable off disk is what hung the whole
+  # desktop for a minute before the game finally died.
+  #
+  # zram is deliberately modest. The game's heap is *hot*, and compressing hot
+  # pages would just trade the freeze for in-game stutter; this is sized to park
+  # genuinely cold pages (backgrounded Discord, baloo, idle shells) so they stop
+  # competing with the page cache.
+  zramSwap = {
+    enable = true;
+    memoryPercent = 25; # ~7.5 GiB device (uncompressed capacity), not 25% of RAM spent
+  };
+  # systemd-oomd is enabled by default but does nothing out of the box: every
+  # slice ships ManagedOOMMemoryPressure=auto, i.e. off, so we always fell
+  # through to the kernel's late global OOM killer. This sets it to `kill` at
+  # 80% sustained pressure on user.slice and every user-owned slice, which
+  # covers the app.slice scope the game runs in. Sustained 80% pressure only
+  # happens in the pathological case, so ordinary heavy builds won't trip it.
+  systemd.oomd.enableUserSlices = true;
   # Enable CUPS to print documents, even though I don't own a printer.
   services.printing.enable = true;
   # Out of box pipewire, everything goes through Volt 2/76 anyways.
@@ -104,9 +144,20 @@
   };
   # Enable touchpad support (enabled default in most desktopManager).
   # services.xserver.libinput.enable = true;
-  # Define a user account. Don't forget to set a password with 'passwd'.
+
+  # The same `briggs` the servers get from modules/users.nix, kept as its own
+  # definition rather than importing that module: this host has no sops, so the
+  # module's hashedPasswordFile would be unresolvable, and the password here is
+  # the interactive one you type at the greeter.
+  #
+  # uid 1000 was already what auto-allocation picked; it is written down now
+  # because it became load-bearing. The NAS at 192.168.1.213 exports /srv/media
+  # over NFSv4 with no identity mapping and owns the library uid=1000 gid=1000,
+  # so nas.nix writes land by owner match on this number. Changing it orphans
+  # ~916G. See modules/users.nix.
   users.users.briggs = {
     isNormalUser = true;
+    uid = 1000;
     description = "briggs";
     shell = pkgs.zsh;
     extraGroups = [

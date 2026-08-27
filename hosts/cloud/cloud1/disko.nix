@@ -1,7 +1,7 @@
 # hosts/cloud1/disko.nix
 #
 # Declarative disk layout for the Linode Nanode - the fleet's first disko /
-# nixos-anywhere install (mgmt/media/playground/hacktop were adopted from running
+# nixos-anywhere install (mgmt/media/hacktop were adopted from running
 # systems). disko turns this attrset into the partition -> format -> mount steps
 # nixos-anywhere runs before copying the closure in, and generates
 # config.fileSystems so configuration.nix doesn't repeat the mounts.

@@ -17,9 +17,7 @@
     btop
     fzf
     #tools
-    sops # edit /etc/nixos secrets: `sops secrets/<host>.yaml`
-    age
-    ssh-to-age
+    age # decrypt backups (see MAINTENANCE.md)
     efibootmgr # one-shot boot into Windows: see reboot-windows alias in zsh.nix
     obs-studio
     obsidian
@@ -58,14 +56,9 @@
       "org.DolphinEmu.dolphin-emu"
     ];
     update.auto = {
-      enable = true;
+      enable = false;
       onCalendar = "weekly";
     };
-  };
-
-  programs.appimage = {
-    enable = true;
-    binfmt = true;
   };
 
   programs.firefox = {

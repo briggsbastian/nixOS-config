@@ -42,10 +42,6 @@
     ip = "192.168.1.189";
     scrape = true;
   };
-  playground = {
-    ip = "192.168.1.217";
-    scrape = true;
-  };
   cloud1 = {
     # recreated 2026-07-02 (terraform apply); IP changes on every recreate
     ip = "172.234.232.185";

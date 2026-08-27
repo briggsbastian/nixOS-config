@@ -676,18 +676,6 @@ in
         ];
       }
       {
-        "Lab" = [
-          # Direct IP on purpose: the Incus UI authenticates with TLS client
-          # certs, which nginx can't proxy (see hosts/lan/playground/incus.nix).
-          {
-            "Incus" = {
-              href = "https://192.168.1.217:8443";
-              description = "playground VM/container lab - UI + console (client-cert auth)";
-            };
-          }
-        ];
-      }
-      {
         "Games" = [
           # Not a web service - tile documents the connect address (hacktop).
           {

@@ -12,21 +12,13 @@
       url = "github:nix-community/nixvim";
     };
     # nixvim's main branch tracks unstable nixpkgs - it maintains release
-    # branches matching nixpkgs channels for exactly this. Used only by
-    # playground (nixpkgs-stable); desktop keeps using the plain `nixvim`
-    # input above, matching its unstable nixpkgs.
+    # branches matching nixpkgs channels for exactly this.
     nixvim-stable = {
       url = "github:nix-community/nixvim/nixos-26.05";
       inputs.nixpkgs.follows = "nixpkgs-stable";
     };
     claude-code = {
       url = "github:sadjow/claude-code-nix";
-    };
-    # claude-desktop keeps its OWN nixpkgs pin (no follows): upstream is
-    # unmaintained (last commit Nov 2025) and still uses `nodePackages`,
-    # which nixpkgs removed in 26.05 - following our nixpkgs breaks its eval.
-    claude-desktop = {
-      url = "github:k3d3/claude-desktop-linux-flake";
     };
     colmena = {
       url = "github:zhaofengli/colmena";
@@ -192,7 +184,7 @@
       serverModules = name: meta: [
         (mkVersionInfo nixpkgs-stable)
         ./modules/common.nix
-        ./modules/users.nix # pinned-UID `briggs`; media/playground opt out (Phase B)
+        ./modules/users.nix # pinned-UID `briggs`; media opts out (Phase B)
         ./modules/internal-ca.nix
         ./modules/siem-lite.nix
         ./modules/audit.nix # inert unless the host sets alcove.audit.enable
@@ -229,15 +221,6 @@
             "media"
           ];
         };
-        playground = {
-          zone = "lan";
-          targetHost = fleetHosts.playground.ip;
-          tags = [
-            "server"
-            "lan"
-            "lab"
-          ];
-        };
         cloud1 = {
           zone = "cloud";
           targetHost = fleetHosts.cloud1.ip;
@@ -254,7 +237,7 @@
         name: meta:
         nixpkgs-stable.lib.nixosSystem {
           system = "x86_64-linux";
-          specialArgs = { inherit inputs; }; # lets a host module reach another input (e.g. playground's nixvim-stable + claude-code)
+          specialArgs = { inherit inputs; }; # lets a host module reach another input
           modules = serverModules name meta;
         };
 
@@ -302,7 +285,6 @@
     {
       nixosConfigurations = {
         nixos-kde = mkSystem { homeFile = ./hosts/workstation/desktop/home-kde.nix; };
-        nixos-hypr = mkSystem { homeFile = ./hosts/workstation/desktop/home-hypr.nix; };
         mgmt = mkMgmtSystem;
       }
       // nixpkgs.lib.mapAttrs mkServerSystem servers;
@@ -310,7 +292,7 @@
       # --- Remote deploy from this desktop (the Colmena control node) ----------
       #   nix develop                          # shell with colmena + sops/age
       #   colmena build --on media             # build only
-      #   colmena apply --on playground             # build + push + activate (as deploy)
+      #   colmena apply --on media             # build + push + activate (as deploy)
       #   colmena apply --on @server           # everything tagged "server"
       colmenaHive = colmena.lib.makeHive (
         {

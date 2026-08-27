@@ -15,6 +15,5 @@
   home.username = "briggs";
   home.packages = [
     inputs.claude-code.packages.${pkgs.stdenv.hostPlatform.system}.claude-code # coding CLI
-    inputs.claude-desktop.packages.${pkgs.stdenv.hostPlatform.system}.claude-desktop # GUI chat client
   ];
 }

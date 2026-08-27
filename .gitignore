@@ -9,6 +9,13 @@ result-*
 .claude/settings.local.json
 **/.claude/settings.local.json
 
+# Claude Code agent worktrees (throwaway copies of the tree)
+.claude/worktrees/
+
+# Fleet reference notes for AI sessions (local working notes, not repo docs).
+# Drop this line if they're ever worth tracking.
+ai-docs/
+
 # Editor / OS noise
 *.swp
 .direnv/

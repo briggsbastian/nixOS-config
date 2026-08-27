@@ -83,9 +83,7 @@ in
     #   et/open              the baseline. Broad, curated, actively maintained.
     #   abuse.ch/sslbl-*     small, high-signal C2/JA3 certificate intel. Almost
     #                        never fires; when it does, it means something.
-    #   stamus/lateral       lateral movement. The most relevant source on this
-    #                        estate, given playground runs Kali and a live HTB
-    #                        VPN on the same flat segment as everything else.
+    #   stamus/lateral       lateral movement. Useful on a flat LAN segment.
     #
     # Dropped:
     #   pawpatrules          rates the gateway doing mDNS as severity 1, with

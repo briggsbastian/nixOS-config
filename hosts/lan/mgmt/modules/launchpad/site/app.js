@@ -43,13 +43,6 @@
       ],
     },
     {
-      key: "lab", label: "Lab", color: "#39ff9d",
-      services: [
-        { name: "Guacamole", desc: "Browser remote-desktop gateway (RDP/VNC/SSH)", href: "http://192.168.1.217:8080/guacamole/" },
-        { name: "Cockpit", desc: "playground libvirt VMs - power/console + host health", href: "https://cockpit.mgmt.lan" },
-      ],
-    },
-    {
       key: "games", label: "Games", color: "#ff9de2",
       services: [
         { name: "All the Mons", desc: "ATMons modpack server - connect to 192.168.1.26:25565", href: "https://www.curseforge.com/minecraft/modpacks/all-the-mons" },

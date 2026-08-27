@@ -39,13 +39,6 @@ _:
           answer = "192.168.1.222";
           enabled = true;
         }
-        # playground is a separate host (.217); exact name beats the
-        # *.mgmt.lan wildcard, so it resolves to the box not mgmt.
-        {
-          domain = "playground.mgmt.lan";
-          answer = "192.168.1.217";
-          enabled = true;
-        }
       ];
       filters = [
         {
