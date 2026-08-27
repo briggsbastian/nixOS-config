@@ -26,8 +26,9 @@ in
     clientMaxBodySize = "500m";
 
     virtualHosts = {
-      "mgmt.lan" = proxy "http://127.0.0.1:8082" { default = true; };
-      "home.mgmt.lan" = proxy "http://127.0.0.1:8082" { };
+      # mgmt.lan is served by the landing-page module (static HTML + API proxies).
+      # home.mgmt.lan retired — landing page is the single pane of glass.
+      # launchpad.mgmt.lan retired — orbit animation replaced by tile dashboard.
       "adguard.mgmt.lan" = proxy "http://127.0.0.1:3000" { };
       "status.mgmt.lan" = proxy "http://127.0.0.1:3001" { };
       "grafana.mgmt.lan" = proxy "http://127.0.0.1:3002" { };

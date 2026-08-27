@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>alcove</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header>
+    <h1 class="title">alcove</h1>
+    <div class="header-right">
+      <span id="clock"></span>
+    </div>
+  </header>
+
+  <main>
+    <!-- Fleet Health -->
+    <section id="fleet-health">
+      <h2>Fleet</h2>
+      <div id="health-bars"></div>
+    </section>
+
+    <!-- Active Alerts -->
+    <section id="active-alerts">
+      <h2>Alerts</h2>
+      <div id="alerts-content"></div>
+    </section>
+
+    <!-- Uptime Summary -->
+    <section id="uptime-section">
+      <h2>Services</h2>
+      <div id="uptime-summary" class="clickable" onclick="toggleSlideout()">
+        <span id="uptime-status"></span>
+        <span class="chevron" id="chevron">&#9660;</span>
+      </div>
+      <div id="uptime-slideout" class="hidden">
+        <div id="uptime-bars"></div>
+      </div>
+    </section>
+
+    <!-- Service Tiles -->
+    <section id="service-tiles">
+      <div id="tiles-container"></div>
+    </section>
+  </main>
+
+  <script src="/app.js"></script>
+</body>
+</html>
