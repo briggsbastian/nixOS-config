@@ -348,6 +348,12 @@
         # server never comes back. Also pins both age recipients on the world
         # backup - dropping one is invisible until the day you need a restore.
         minecraft-console = import ./tests/minecraft-console.nix { inherit pkgs; };
+        # World-archive retention, the one rule in the backup chain whose
+        # failure mode is entirely silent: one archive too greedy, and the
+        # night you need a rollback is the night it is not there. Pins the
+        # .partial invariant too. Not a VM test - it is a pure function from a
+        # directory listing to a set of unlinks, so it runs in seconds.
+        minecraft-prune = import ./tests/minecraft-prune.nix { inherit pkgs; };
         # fmt + lint gate. Fails on an unformatted tree -- the `style: nix fmt the
         # tree` commit is what makes it green (drop that commit and this goes red).
         formatting = treefmtEval.config.build.check self;

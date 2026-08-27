@@ -224,9 +224,17 @@ in
                   description: "Prometheus has not scraped {{ $labels.instance }} for 5m (host down, exporter stopped, or :9100 blocked)."
 
               # Any real local filesystem over 85% full. Network (nfs) + ephemeral
-              # (tmpfs/overlay/...) filesystems are excluded: the NAS is monitored
-              # at the NAS, and /mnt/media is an autofs automount node_exporter
-              # can't see reliably anyway.
+              # (tmpfs/overlay/...) filesystems are excluded: /mnt/media is an
+              # autofs automount node_exporter can't see reliably anyway.
+              #
+              # An older version of this comment claimed "the NAS is monitored at
+              # the NAS". It is not, and never was - the NAS is unmanaged (see
+              # blackbox-nas above: no SNMP, no API, no node_exporter), so this
+              # exclusion left its capacity watched by nobody. On 2026-08-20 the
+              # share was found by hand at 94% full with ~20 days of life left,
+              # most of it the ATMons world archives. NasBackupStore* below is
+              # the replacement: hacktop's backup job df's the share it writes
+              # to, which is the one process guaranteed to be looking.
               - alert: NodeDiskFull
                 expr: |
                   (1 - node_filesystem_avail_bytes{fstype!~"tmpfs|ramfs|overlay|squashfs|fuse.*|nfs.*|autofs|devtmpfs|efivarfs"}
@@ -439,6 +447,40 @@ in
                 annotations:
                   summary: "The ATMons backup has not been restore-verified in over 40 days"
                   description: "minecraft-backup-verify.service last succeeded more than 40d ago, or never. A green timer is not a backup."
+
+              # The NAS share, watched from the only host that both writes to it
+              # and runs node_exporter. See the NodeDiskFull comment above for
+              # why nothing else does. Absolute floor, not a percentage: what
+              # matters is whether one more 12.9 GB world archive fits, and on
+              # an 853 GB share a percentage threshold answers that far too
+              # late. 60 GiB is a bit over four archives' worth.
+              - alert: NasBackupStoreLow
+                expr: minecraft_backup_store_free_bytes < 60 * 1024 * 1024 * 1024
+                for: 0m
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "The NAS share holding the world backups is nearly full"
+                  description: "{{ $value | humanize1024 }}B free on 192.168.1.213:/srv/media. Under ~13 GB the nightly ATMons archive stops fitting and the backup starts failing - which is also when the media library stops accepting writes."
+
+              # The alert that would actually have caught this one early: the
+              # share does not fall off a cliff, it fills at a steady few GB a
+              # day and nobody looks. predict_linear over a fortnight is long
+              # enough that one big media import does not trip it and short
+              # enough to see a retention change land.
+              #
+              # Deliberately paired with, not replaced by, the floor above: a
+              # sudden 200 GB import breaks the trend line and only the floor
+              # catches it, while a slow fill trips this weeks before the floor.
+              - alert: NasBackupStoreFillingUp
+                expr: |
+                  predict_linear(minecraft_backup_store_free_bytes[14d], 30 * 24 * 3600) < 0
+                for: 6h
+                labels:
+                  severity: warning
+                annotations:
+                  summary: "The NAS share will be full within 30 days at the current rate"
+                  description: "192.168.1.213:/srv/media is trending to zero free within 30d ({{ $value | humanize1024 }}B projected). Check retention in hosts/lan/hacktop/minecraft-backup.nix and the media library's growth before it becomes urgent."
 
           - name: minecraft-proxy
             rules:

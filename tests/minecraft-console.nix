@@ -150,6 +150,27 @@ pkgs.testers.runNixOSTest {
         )
         machine.fail("ls /mnt/nas/_backups/minecraft/.atmons-world-*.partial")
 
+    # Retention itself is proved exhaustively and hermetically in
+    # tests/minecraft-prune.nix. What is only provable HERE is that the backup
+    # unit actually reaches it - a prune that is never called looks identical
+    # to a prune that keeps everything, and the NAS filling up is how you find
+    # out. Same for the capacity metrics: nothing else in the fleet watches
+    # the NAS, so these are the only numbers there are.
+    with subtest("the run prunes and reports what the store costs"):
+        # -o cat: without it every line carries a timestamp/host/unit prefix
+        # and the anchor never matches.
+        machine.succeed(
+            "journalctl -u minecraft-backup --no-pager -o cat | grep -q '^prune: keep'"
+        )
+        machine.succeed(
+            "grep -q '^minecraft_backup_store_bytes [0-9]' "
+            "/var/lib/node-exporter-textfile/minecraft_backup.prom"
+        )
+        machine.succeed(
+            "grep -q '^minecraft_backup_store_free_bytes [0-9]' "
+            "/var/lib/node-exporter-textfile/minecraft_backup.prom"
+        )
+
     with subtest("both recipients are present - dropping one is invisible until a restore"):
         # X25519 is the admin key; ssh-ed25519 is hacktop's host key, which is
         # the only reason the verify job below can work at all.
