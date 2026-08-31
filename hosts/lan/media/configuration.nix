@@ -18,6 +18,7 @@
   imports = [
     ./hardware-configuration.nix
     ./arr.nix
+    ./kapowarr.nix
     ../../../modules/media-hardening.nix
   ];
 

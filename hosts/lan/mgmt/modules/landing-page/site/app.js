@@ -49,6 +49,7 @@
         { name: "Bazarr", desc: "Subtitles", href: "http://192.168.1.189:6767" },
         { name: "NZBGet", desc: "Usenet downloader", href: "http://192.168.1.189:6789" },
         { name: "Kavita", desc: "Books, comics & manga", href: "http://192.168.1.189:5000" },
+        { name: "Kapowarr", desc: "Comic/manga download manager", href: "https://kapowarr.mgmt.lan", probe: "https://kapowarr.mgmt.lan" },
         { name: "Newspaper", desc: "Morning e-ink RSS edition", href: "https://news.mgmt.lan", probe: "https://news.mgmt.lan" }
       ]
     },

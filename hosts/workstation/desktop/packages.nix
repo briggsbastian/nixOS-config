@@ -32,6 +32,7 @@
     tidal-hifi
     proton-pass
     proton-vpn
+    wootility
     eddie
     reaper
     bitwig-studio

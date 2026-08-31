@@ -36,6 +36,7 @@ in
       "git.mgmt.lan" = proxy "http://127.0.0.1:3004" { };
       "news.mgmt.lan" = proxy "http://127.0.0.1:8377" { };
       "budget.mgmt.lan" = proxy "http://127.0.0.1:8378" { };
+      "kapowarr.mgmt.lan" = proxy "http://192.168.1.189:5656" { };
       "cache.mgmt.lan" = proxy "http://127.0.0.1:5000" {
         # binary cache pubkey for client configs
         locations."= /pubkey".alias = "/var/lib/mgmt-public/harmonia.pub";
