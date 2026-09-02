@@ -1,4 +1,4 @@
-# Session: Fleet Cleanup + Landing Page
+# Session: Fleet Cleanup + Landing Page + Kapowarr
 
 ## What the user wants
 - Clean up stale branches, merge what's valuable, abandon what isn't
@@ -9,6 +9,7 @@
 - Uptime bars from Prometheus blackbox probes, 30s poll
 - Slideout shows ALL services; probed ones get uptime bars, non-probed show "—"
 - Homepage tile layout (no orbit animation)
+- Add Kapowarr (comic/manga download manager) to media server via Docker
 
 ## Phase 1: Branch cleanup — COMPLETE
 
@@ -36,16 +37,6 @@
 ### Final branch state
 - `main` (current, pushed to origin)
 - `fix/hacktop-ci-oom-priority` (local only, HOLD)
-
-### Commits on main
-```
-ea51f83 mgmt: single pane of glass landing page at mgmt.lan
-a6c6a7c Merge branch 'fix/mc-backup-retention'
-12daaff Merge branch 'feat/atmons-roles'
-31a9c6e desktop: cleanup — drop hyprland, flatpak auto-update, appimage, claude-desktop, nas mount, deploy tools from system packages
-9192564 monitoring: the NAS was watched by nobody, which is how it reached 94%
-8428f6e atmons: 14 dailies is 180 GB of NAS, and the NAS has three weeks left
-```
 
 ## Phase 2: Landing page — COMPLETE
 
@@ -79,15 +70,46 @@ a6c6a7c Merge branch 'fix/mc-backup-retention'
 - JS fetches via same-origin (no CORS issues), polls every 30s
 - Graceful degradation: shows "unavailable" or "—" if API unreachable
 
-### Verification
-- `nix flake check` — all checks passed
-- Pushed to origin/main
+## Phase 3: Kapowarr on media — COMPLETE
 
-## What's next after this session
-- Deploy to mgmt: `colmena apply --on mgmt`
-- Verify landing page at `https://mgmt.lan`
-- Check fleet health bars show correct data for all 4 hosts
-- Check active alerts widget shows firing alerts
-- Check uptime slideout shows all services with bars/—
-- If any API proxy issues, debug nginx config
-- Consider iterating on the landing page design based on usage
+### New files
+- `hosts/lan/media/kapowarr.nix` — Docker container for Kapowarr
+
+### Files modified
+- `hosts/lan/media/configuration.nix` — added kapowarr.nix import
+- `hosts/lan/mgmt/modules/nginx.nix` — added `kapowarr.mgmt.lan` vhost
+- `hosts/lan/mgmt/modules/landing-page/site/app.js` — added Kapowarr tile + probe
+
+### Kapowarr config
+- Docker image: `mrcas/kapowarr:latest`
+- Port: 5656
+- Volumes: `kapowarr-db:/app/db`, `/var/lib/kapowarr/temp_downloads:/app/temp_downloads`, `/mnt/media/Media/Comics:/comics`
+- Waits for NAS mount before starting
+- TLS via nginx at `kapowarr.mgmt.lan`
+
+## Secrets — COMPLETE
+
+Added `briggs_hashed_password` to:
+- `secrets/mgmt.yaml`
+- `secrets/hacktop.yaml`
+- `secrets/cloud1.yaml`
+
+One-liner to add to a host's secrets:
+```sh
+HASH=$(mkpasswd -m yescrypt) && nix develop --command bash -c "sops set /etc/nixos/secrets/<host>.yaml '[\"briggs_hashed_password\"]' \"\\\"$HASH\\\"\""
+```
+
+## Deployment status
+
+| Host | Status | Notes |
+|---|---|---|
+| mgmt | ✅ Deployed | Landing page live, API proxies working |
+| cloud1 | ✅ Deployed | briggs_hashed_password applied |
+| hacktop | ❌ Unreachable | Wired (.26) down, Wi-Fi (.241) reachable but SSH key auth fails (old user) |
+| media | ⏳ Pending | Kapowarr ready to deploy |
+
+## What's next
+- Deploy media: `colmena apply --on media`
+- Fix hacktop: either reconnect wired cable, or SSH to .241 and fix SSH keys
+- Verify landing page at `https://mgmt.lan` in browser
+- Verify Kapowarr at `https://kapowarr.mgmt.lan` after media deploy
