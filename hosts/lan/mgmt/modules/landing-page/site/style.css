@@ -11,6 +11,7 @@
   --red: #ef4444;
   --accent: #3b82f6;
   --radius: 8px;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 1px 1px rgba(0, 0, 0, 0.2);
 }
 
 * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -30,13 +31,28 @@ header {
   padding: 1rem 1.5rem;
   border-bottom: 1px solid var(--border);
   background: var(--surface);
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  z-index: 10;
 }
 
 .title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1.25rem;
   font-weight: 600;
   letter-spacing: 0.1em;
   color: var(--text);
+}
+
+.title::before {
+  content: "";
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--accent);
 }
 
 .header-right {
@@ -67,11 +83,13 @@ section h2 {
 .health-row {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 1rem;
   padding: 0.5rem 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   margin-bottom: 0.5rem;
 }
 
@@ -137,6 +155,7 @@ section h2 {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   font-size: 0.85rem;
 }
 
@@ -167,9 +186,11 @@ section h2 {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   cursor: pointer;
   font-size: 0.85rem;
   user-select: none;
+  transition: background 0.15s;
 }
 
 #uptime-summary:hover { background: var(--surface-hover); }
@@ -279,19 +300,28 @@ section h2 {
 }
 
 .tile {
-  display: block;
+  /* .tile-name and .tile-desc are plain <span>s with no whitespace between
+     them in the generated markup, so without an explicit flex/block layout
+     they render inline and run together as one line of unspaced text
+     ("JellyfinMedia streaming"). Flex column stacks them and gives a
+     controllable gap instead. */
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
   padding: 0.6rem 0.75rem;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
+  box-shadow: var(--shadow);
   text-decoration: none;
   color: var(--text);
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
 }
 
 .tile:hover {
   background: var(--surface-hover);
   border-color: var(--accent);
+  transform: translateY(-1px);
 }
 
 .tile-name {
@@ -302,7 +332,6 @@ section h2 {
 .tile-desc {
   font-size: 0.75rem;
   color: var(--text-dim);
-  margin-top: 0.15rem;
 }
 
 /* Loading state */
@@ -310,4 +339,22 @@ section h2 {
   color: var(--text-muted);
   font-style: italic;
   font-size: 0.8rem;
+}
+
+@media (max-width: 640px) {
+  header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.4rem;
+  }
+
+  .health-metrics {
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .metric {
+    min-width: 0;
+    width: 100%;
+  }
 }

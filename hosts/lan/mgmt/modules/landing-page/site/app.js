@@ -3,11 +3,17 @@
 
   // ---------- DATA ----------
 
+  // instance must match the `instance` label Prometheus actually attaches to
+  // each series, not the scrape address. monitoring.nix's "node" job sets
+  // labels.instance = <hostname> per static_config (see fleet-hosts.nix) —
+  // it is not derived from __address__ — so these are plain hostnames, not
+  // ip:port. Keying this on ip:port silently matched nothing and every host
+  // fell into the "unavailable" branch below.
   var HOSTS = [
-    { name: "mgmt", instance: "192.168.1.222:9100" },
-    { name: "media", instance: "192.168.1.189:9100" },
-    { name: "hacktop", instance: "192.168.1.26:9100" },
-    { name: "cloud1", instance: "10.100.0.1:9100" }
+    { name: "mgmt", instance: "mgmt" },
+    { name: "media", instance: "media" },
+    { name: "hacktop", instance: "hacktop" },
+    { name: "cloud1", instance: "cloud1" }
   ];
 
   var SERVICE_DATA = [
@@ -108,6 +114,7 @@
   }
 
   function renderHealth(cpu, mem, disk) {
+    healthEl.classList.remove("loading");
     var html = "";
     HOSTS.forEach(function (h) {
       var c = cpu[h.instance], m = mem[h.instance], d = disk[h.instance];
@@ -156,6 +163,7 @@
   var alertsEl = document.getElementById("alerts-content");
 
   function renderAlerts(alerts) {
+    alertsEl.classList.remove("loading");
     if (alerts.length === 0) {
       alertsEl.innerHTML = '<span class="alerts-clear">All clear</span>';
       return;
@@ -262,6 +270,7 @@
     });
 
     // Summary line
+    uptimeStatusEl.classList.remove("loading");
     if (issueCount === 0) {
       uptimeStatusEl.innerHTML = '<span class="alerts-clear">All services healthy</span>';
     } else {
