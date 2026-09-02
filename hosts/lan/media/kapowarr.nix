@@ -22,7 +22,6 @@
       PGID = "100";
       TZ = "America/Los_Angeles";
     };
-    extraOptions = [ "--restart=unless-stopped" ];
   };
 
   # Kapowarr must wait for the NAS mount before it can see the Comics folder.
