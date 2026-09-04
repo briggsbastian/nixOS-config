@@ -13,7 +13,7 @@
 # was the largest single thing on it; at the then-current rate the share had
 # about three weeks of life in it, with a SECOND world still to come. Now:
 #
-#     3 dailies + 1 weekly + 1 monthly   = at most 5 archives, ~65 GB
+#     3 dailies + 1 weekly + 2 monthlies = at most 6 archives, ~81 GB
 #
 # Deliberately a tiered set rather than a flat `keep = 3`. Flat 3 would have
 # freed ~26 GB more, but these archives are the griefing-recovery story for a
@@ -23,15 +23,20 @@
 # two to four weeks, for two archives - about a fifth of what dropping 14 -> 3
 # recovers in the first place.
 #
-# Be honest about the shape of that, though: with keepMonthly = 1 the horizon
-# oscillates. It is deepest at the end of a calendar month (the monthly slot
-# holds last month's last archive, ~30 days back) and collapses to the daily
-# window for the day or two after a month turns over, when last month's last
-# archive is still inside the daily window and so consumes the monthly slot.
-# So this is never WORSE than the flat 3 the space budget asked for, and
-# usually much better - but it is not a guaranteed 30 days. Making it one is
-# `keepMonthly = 2`: one more archive, ~13 GB, no other change. Worth doing
-# once the NAS has headroom again; not while it has three weeks of life left.
+# keepMonthly was 1, and with 1 the horizon OSCILLATED: deepest at the end of
+# a calendar month (the monthly slot holds last month's last archive, ~30 days
+# back) and collapsing to the bare daily window for the day or two after a
+# month turned over, when last month's last archive was still inside the daily
+# window and so consumed the monthly slot too. Never worse than the flat 3 the
+# space budget asked for, but not a guaranteed 30 days either.
+#
+# It is 2 as of 2026-09-04, which makes the ~30 days guaranteed - two monthly
+# slots cannot both be eaten by the daily window. The header above deferred
+# this until "the NAS has headroom again", and that is now: hacktop had been
+# running a revision that predated minecraft-prune.nix entirely (see the
+# commit that came with this change), so NOTHING had ever pruned this
+# directory and it had reached ~418 GB on an 853 GB share. Pruning it back to
+# the policy is what bought the ~16 GB this costs, several times over.
 #
 # NOT COMPRESSED, and that is a decision rather than an oversight - `tar -cf -`
 # into `age`, and age does not compress either, which is why a ~12 GB world is
@@ -119,7 +124,7 @@ let
   # already keeps and the set is smaller.
   keepDaily = 3;
   keepWeekly = 1;
-  keepMonthly = 1;
+  keepMonthly = 2;
 
   pruneArchives = import ./minecraft-prune.nix { inherit pkgs; };
 
