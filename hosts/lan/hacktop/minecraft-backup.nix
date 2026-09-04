@@ -252,6 +252,17 @@ in
       ts=$(date +%Y%m%d-%H%M%S)
       install -d -m 0700 "${nasDir}"
 
+      # Reap .partial files left behind by a killed or failed earlier run.
+      # minecraft-prune.nix deliberately refuses to consider these - twice
+      # over, by the leading dot and by the suffix - which is exactly right
+      # for retention but means NOTHING ever reclaims them. Six consecutive
+      # failed nights left ~96 GB of them on a share that was already at 99%,
+      # and a full share is itself a reason the next backup cannot land. The
+      # flock held above is what makes this safe: only one run exists at a
+      # time, so no live writer owns any of these.
+      find "${nasDir}" -maxdepth 1 -type f \
+        -name ".${archivePrefix}-*.tar.age.partial" -print -delete || true
+
       # Write to a dotted .partial first: a killed run must not leave a
       # truncated archive that looks valid, and retention must never be able
       # to select one. That is now enforced in two independent places - the
@@ -264,8 +275,48 @@ in
       # tar -> age streamed: the plaintext tarball never touches disk. Two
       # recipients: the admin key for real restores, hacktop's own host key so
       # minecraft-backup-verify can check its work.
+      #
+      # tar's exit 1 is a WARNING ("file changed as we read it"), not a
+      # failure: the member is still written, in full, at the length tar
+      # declared - it may just be torn. Exit 2 is the fatal one. Under
+      # `set -e` + `pipefail` both used to abort the run before the mv below,
+      # so a mod touching the world dir mid-read threw away an otherwise good
+      # 16 GB archive and left the .partial behind - nightly, from 2026-08-30
+      # to 2026-09-04, which is what took the backup stale. A possibly-torn
+      # archive beats no archive (the same trade the quiesce fallback already
+      # makes), so exit 1 downgrades `quiesced` instead. That is exactly what
+      # the metric means here - "is this archive consistent", not "did we talk
+      # to the console" - and MinecraftBackupNotQuiesced already says to read
+      # this journal to find out which of the two it was.
+      set +e
       tar -cf - -C /srv/minecraft atmons \
         | age -r "${adminRecipient}" -R ${hostKeyPub} -o "$partial"
+      pipe_status=(''${PIPESTATUS[@]})
+      set -e
+      tar_rc=''${pipe_status[0]}
+      age_rc=''${pipe_status[1]}
+
+      # age is never allowed to fail softly: a truncated ciphertext is not a
+      # backup, and leaving the .partial would hand the next run a file it
+      # has to reason about.
+      if [ "$age_rc" -ne 0 ]; then
+        echo "age failed (rc=$age_rc) - no usable archive" >&2
+        rm -f "$partial"
+        exit 1
+      fi
+
+      case "$tar_rc" in
+        0) ;;
+        1)
+          echo "WARNING: tar reported a file changed while reading; archive kept, may be torn" >&2
+          quiesced=0
+          ;;
+        *)
+          echo "tar failed (rc=$tar_rc) - no usable archive" >&2
+          rm -f "$partial"
+          exit 1
+          ;;
+      esac
 
       restore_saving
       save_off_sent=0
@@ -375,9 +426,17 @@ in
       # keeps this to one decrypt pass; it is a few MB of filenames even for a
       # large world, against the ~GB of ciphertext it avoids re-reading.
       listing=$(age -d -i ${hostKey} "$newest" | tar -tf -)
-      count=$(printf '%s\n' "$listing" | wc -l)
+      count=$(wc -l <<<"$listing")
 
-      if ! printf '%s\n' "$listing" | grep -qa 'atmons/world/level.dat'; then
+      # Herestrings, NOT `printf | grep -q`. grep -q exits the instant it
+      # matches; printf is then killed by SIGPIPE; and under `pipefail` the
+      # pipeline takes PRINTF's status, not grep's. So the old form reported
+      # "level.dat is missing" precisely when level.dat WAS found - on any
+      # listing big enough that printf had not already finished writing, which
+      # for a 371-mod world is every one of them. That is what failed this job
+      # on 2026-09-01 and left the fleet unverified. A herestring has no
+      # reader to race.
+      if ! grep -qa 'atmons/world/level.dat' <<<"$listing"; then
         echo "decrypted fine but atmons/world/level.dat is missing - wrong directory archived?" >&2
         exit 1
       fi
